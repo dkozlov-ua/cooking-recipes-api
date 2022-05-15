@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+ACTION=$1
+
+if [[ $ACTION == "start" ]]
+then
+     docker build --tag recipes:latest . \
+  && docker-compose --env-file env.dev run --entrypoint "./manage.py makemigrations" api \
+  && docker-compose --env-file env.dev run --entrypoint "./manage.py migrate" api \
+  && docker-compose --env-file env.dev up
+else
+     docker-compose --env-file env.dev down
+fi
