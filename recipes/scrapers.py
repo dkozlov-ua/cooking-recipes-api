@@ -33,7 +33,7 @@ BA_API_BASE_URL = 'https://www.bonappetit.com'
 BA_ASSETS_BASE_URL = 'https://assets.bonappetit.com'
 
 
-def _parse_recipe(data: Dict) -> Tuple[Recipe, List[Tag], List[Author]]:
+def _parse_ba_recipe(data: Dict) -> Tuple[Recipe, List[Tag], List[Author]]:
     ingredient_groups = []
     for ingredient_group in data['ingredientGroups']:
         ingredient_groups.append({
@@ -95,32 +95,36 @@ def _parse_recipe(data: Dict) -> Tuple[Recipe, List[Tag], List[Author]]:
     return recipe, tags, authors
 
 
-def bonappetit(from_date: Optional[datetime.datetime]) -> Tuple[int, Optional[datetime.datetime]]:
-    session = requests.session()
+def _load_ba_page(session: requests.Session, page_n: int) -> Dict:
     ba_url = f"{BA_API_BASE_URL}/api/search"
     params: Dict[str, Union[str, int]] = {
         'content': 'recipe',
         'sort': 'newest',
+        'page': page_n,
     }
+    attempt_n = 1
+    while True:
+        try:
+            logger.debug(f"Page {page_n}: loading")
+            resp = session.get(url=ba_url, params=params)
+            resp.raise_for_status()
+        except (requests.HTTPError, requests.JSONDecodeError) as exc:
+            logger.warning(f"Page {page_n}: error (attempt {attempt_n}/{3}): {type(exc).__name__}: {str(exc)}")
+            if attempt_n >= 3:
+                raise
+            time.sleep(random.uniform(0.85, 1.15) * 3.0)
+            attempt_n += 1
+        else:
+            return resp.json()
+
+
+def bonappetit(from_date: Optional[datetime.datetime]) -> Tuple[int, Optional[datetime.datetime]]:
+    session = requests.session()
     saved_items_count = 0
     latest_item_date: Optional[datetime.datetime] = None
     oldest_item_date: Optional[datetime.datetime] = None
     for page_n in count(start=1):
-        data: Dict = {}
-        for attempt_n in count(start=1):
-            params['page'] = page_n
-            try:
-                logger.debug(f"Page {page_n}: loading")
-                resp = session.get(url=ba_url, params=params)
-                resp.raise_for_status()
-            except (requests.HTTPError, requests.JSONDecodeError) as exc:
-                logger.warning(f"Page {page_n}: error (attempt {attempt_n}/{3}): {type(exc).__name__}: {str(exc)}")
-                if attempt_n >= 3:
-                    raise
-                time.sleep(random.uniform(0.85, 1.15) * 3.0)
-            else:
-                data = resp.json()
-                break
+        data = _load_ba_page(session, page_n)
 
         if not data['items']:
             logger.info(f"Page {page_n}: stopping: page is empty")
@@ -141,7 +145,7 @@ def bonappetit(from_date: Optional[datetime.datetime]) -> Tuple[int, Optional[da
                         continue
                 saved_items_count += 1
 
-                recipe, tags, authors = _parse_recipe(row)
+                recipe, tags, authors = _parse_ba_recipe(row)
 
                 recipe.save()
                 for tag in tags:
