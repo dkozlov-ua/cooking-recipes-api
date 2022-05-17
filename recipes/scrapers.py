@@ -3,7 +3,7 @@ import logging
 import random
 import re
 import time
-from itertools import count
+from itertools import count, chain
 from typing import List, Tuple, Optional, Dict, Union
 
 import dateparser
@@ -81,12 +81,16 @@ def _parse_recipe(data: Dict) -> Tuple[Recipe, List[Tag], List[Author]]:
 
     authors: List[Author] = []
     if data['contributors']:
-        for author_row in data['contributors']['author']:
-            author = Author(
-                id=Author.id_from_name(author_row['name']),
-                name=author_row['name'],
-            )
-            authors.append(author)
+        for author_row in chain(
+                data['contributors'].get('author') or [],
+                data['contributors'].get('chef') or [],
+        ):
+            for author_name in author_row['name'].split(' & '):
+                author = Author(
+                    id=Author.id_from_name(author_name),
+                    name=author_name,
+                )
+                authors.append(author)
 
     return recipe, tags, authors
 
