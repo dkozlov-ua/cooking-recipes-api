@@ -13,11 +13,11 @@ logger = get_task_logger(__name__)
 
 @shared_task
 @log_exception(logger)
-def update_recipes_bonappetit(from_date: Optional[datetime.datetime] = None) -> None:
+def update_recipes_bonappetit(from_date: Optional[datetime.datetime] = None, from_page: int = 1) -> None:
     if not from_date:
         try:
             from_date = models.Recipe.objects.latest().pub_date
         except models.Recipe.DoesNotExist:
             from_date = None
-    saved_count, _ = scrapers.bonappetit(from_date)
+    saved_count, _ = scrapers.bonappetit(from_date, from_page)
     logger.debug(f"Fetched {saved_count} bonappetit recipes")

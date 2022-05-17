@@ -44,11 +44,10 @@ class RecipeViewSet(viewsets.ReadOnlyModelViewSet):
         if request.query_params.get('from_date'):
             from_date = dateparser.parse(request.query_params['from_date'])
         else:
-            try:
-                from_date = models.Recipe.objects.latest().pub_date
-            except models.Recipe.DoesNotExist:
-                from_date = None
-        task: AsyncResult = tasks.update_recipes_bonappetit.delay(from_date)
+            from_date = None
+        from_page = int(request.query_params.get('from_page') or 1)
+
+        task: AsyncResult = tasks.update_recipes_bonappetit.delay(from_date, from_page)
         return Response({
             'task_id': task.id,
         })

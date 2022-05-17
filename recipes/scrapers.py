@@ -118,12 +118,12 @@ def _load_ba_page(session: requests.Session, page_n: int) -> Dict:
             return resp.json()
 
 
-def bonappetit(from_date: Optional[datetime.datetime]) -> Tuple[int, Optional[datetime.datetime]]:
+def bonappetit(from_date: Optional[datetime.datetime], from_page: int = 1) -> Tuple[int, Optional[datetime.datetime]]:
     session = requests.session()
     saved_items_count = 0
     latest_item_date: Optional[datetime.datetime] = None
     oldest_item_date: Optional[datetime.datetime] = None
-    for page_n in count(start=1):
+    for page_n in count(start=from_page):
         data = _load_ba_page(session, page_n)
 
         if not data['items']:
