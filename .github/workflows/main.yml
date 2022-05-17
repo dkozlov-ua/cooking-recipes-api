@@ -7,8 +7,6 @@ on:
 jobs:
   lint_build_push:
     runs-on: ubuntu-latest
-    needs:
-      - lint
     permissions:
       packages: write
     steps:
