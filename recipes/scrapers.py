@@ -106,16 +106,29 @@ def bonappetit(from_date: Optional[datetime.datetime]) -> Tuple[int, Optional[da
     latest_item_date: Optional[datetime.datetime] = None
     oldest_item_date: Optional[datetime.datetime] = None
     for page_n in count(start=1):
-        logger.debug(f"Page {page_n}: loading")
-        params['page'] = page_n
-        resp = session.get(url=ba_url, params=params).json()
-        if not resp['items']:
+        data: Dict = {}
+        for attempt_n in count(start=1):
+            params['page'] = page_n
+            try:
+                logger.debug(f"Page {page_n}: loading")
+                resp = session.get(url=ba_url, params=params)
+                resp.raise_for_status()
+            except (requests.HTTPError, requests.JSONDecodeError) as exc:
+                logger.warning(f"Page {page_n}: error (attempt {attempt_n}/{3}): {type(exc).__name__}: {str(exc)}")
+                if attempt_n >= 3:
+                    raise
+                time.sleep(random.uniform(0.85, 1.15) * 3.0)
+            else:
+                data = resp.json()
+                break
+
+        if not data['items']:
             logger.info(f"Page {page_n}: stopping: page is empty")
             break
 
+        logger.debug(f"Page {page_n}: fetching items")
         with transaction.atomic():
-            logger.debug(f"Page {page_n}: fetching items")
-            for row in resp['items']:
+            for row in data['items']:
                 if '/sponsored/' in row['url'] or row['template'] == 'sponsored':
                     continue
                 pub_date = dateparser.parse(row['pubDate'])
@@ -138,7 +151,7 @@ def bonappetit(from_date: Optional[datetime.datetime]) -> Tuple[int, Optional[da
                     author.save()
                 recipe.authors.set(authors)
 
-        logger.info(f"Page {page_n}: fetched {len(resp['items'])} items ({saved_items_count} total)")
+        logger.info(f"Page {page_n}: fetched {len(data['items'])} items ({saved_items_count} total)")
         if oldest_item_date:
             logger.info(f"Page {page_n}: fetched from {oldest_item_date.isoformat()}")
         if from_date and oldest_item_date and oldest_item_date <= from_date:
