@@ -3,7 +3,6 @@ from celery import shared_task
 from celery.utils.log import get_task_logger
 from django.conf import settings
 
-from backend.celery import log_exception
 from recipes.models import Recipe
 from telegram.formatters import recipe_to_message
 from telegram.models import Subscription
@@ -17,7 +16,6 @@ logger = get_task_logger(__name__)
 
 
 @shared_task
-@log_exception(logger)
 def send_recipes_for_subscription(subscription: Subscription) -> None:
     logger.debug(f"Processing subscription: {subscription}")
     if subscription.tag:
@@ -43,7 +41,6 @@ def send_recipes_for_subscription(subscription: Subscription) -> None:
 
 
 @shared_task
-@log_exception(logger)
 def fulfill_subscriptions() -> None:
     subscriptions = Subscription.objects.filter(tag__isnull=False)
     for subscription in subscriptions:

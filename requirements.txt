@@ -15,5 +15,6 @@ pylint
 pylint-django
 pyTelegramBotAPI
 requests
+sentry-sdk
 types-dateparser
 whitenoise

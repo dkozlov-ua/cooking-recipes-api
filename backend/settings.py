@@ -12,10 +12,22 @@ https://docs.djangoproject.com/en/4.0/ref/settings/
 from pathlib import Path
 
 import environ
+import sentry_sdk
+from sentry_sdk.integrations.celery import CeleryIntegration
+from sentry_sdk.integrations.django import DjangoIntegration
 
 from backend.utils import generate_secret_key
 
 env = environ.Env()
+
+sentry_sdk.init(
+    integrations=[
+        CeleryIntegration(),
+        DjangoIntegration(),
+    ],
+    traces_sample_rate=1.0,
+    send_default_pii=True,
+)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -108,7 +120,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CELERY_BROKER_URL = env('CELERY_BROKER_URL', default='redis://redis:6379/0')
 CELERY_TASK_SERIALIZER = 'pickle'
 CELERY_ACCEPT_CONTENT = ['pickle']
-CELERY_TASK_IGNORE_RESULT = True
+CELERY_IGNORE_RESULT = True
 
 # Telegram settings
 TELEGRAM_BOT_TOKEN = env('TELEGRAM_BOT_TOKEN', default='TELEGRAM_BOT_TOKEN_NOT_SET')

@@ -11,7 +11,6 @@ volumes:
 services:
   api:
     image: recipes:latest
-    restart: always
     entrypoint: ./api_entrypoint.sh
     command:
       - --access-logfile=-
@@ -25,6 +24,8 @@ services:
       CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:?err}
       SECRET_KEY: ${SECRET_KEY:?err}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?err}
+      SENTRY_DSN:
+      SENTRY_ENVIRONMENT:
       DATABASE_URL: psql://postgres:postgres@postgres:5432/postgres
       CELERY_BROKER_URL: redis://redis:6379/0
     volumes:
@@ -44,7 +45,6 @@ services:
 
   celery_worker:
     image: recipes:latest
-    restart: on-failure
     entrypoint: celery --app=backend
     command:
       - worker
@@ -55,6 +55,8 @@ services:
       CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:?err}
       SECRET_KEY: ${SECRET_KEY:?err}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?err}
+      SENTRY_DSN:
+      SENTRY_ENVIRONMENT:
       DATABASE_URL: psql://postgres:postgres@postgres:5432/postgres
       CELERY_BROKER_URL: redis://redis:6379/0
       C_FORCE_ROOT: x
@@ -68,7 +70,6 @@ services:
 
   celery_beat:
     image: recipes:latest
-    restart: on-failure
     entrypoint: celery --app=backend
     command:
       - beat
@@ -80,6 +81,8 @@ services:
       CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:?err}
       SECRET_KEY: ${SECRET_KEY:?err}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?err}
+      SENTRY_DSN:
+      SENTRY_ENVIRONMENT:
       DATABASE_URL: psql://postgres:postgres@postgres:5432/postgres
       CELERY_BROKER_URL: redis://redis:6379/0
       C_FORCE_ROOT: x
@@ -94,7 +97,6 @@ services:
 
   telegram_bot:
     image: recipes:latest
-    restart: on-failure
     entrypoint: python -m telegram
     command:
       - --loglevel=info
@@ -104,6 +106,8 @@ services:
       CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:?err}
       SECRET_KEY: ${SECRET_KEY:?err}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?err}
+      SENTRY_DSN:
+      SENTRY_ENVIRONMENT:
       DATABASE_URL: psql://postgres:postgres@postgres:5432/postgres
       CELERY_BROKER_URL: redis://redis:6379/0
     depends_on:
