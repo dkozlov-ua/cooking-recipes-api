@@ -36,7 +36,7 @@ class Author(models.Model):
 
 class Recipe(models.Model):
     id = models.TextField(primary_key=True)
-    url = models.URLField()
+    url = models.URLField(max_length=1000)
     pub_date = models.DateTimeField(null=True)
     name = models.TextField()
     title = models.TextField()
@@ -45,7 +45,7 @@ class Recipe(models.Model):
     rating = models.FloatField()
     reviews_count = models.IntegerField()
     wma_count = models.IntegerField()
-    photo_url = models.URLField(null=True)
+    photo_url = models.URLField(null=True, max_length=1000)
     ingredient_groups = models.JSONField()
     tags = models.ManyToManyField(Tag, related_name='recipes')
     authors = models.ManyToManyField(Author, related_name='recipes')
