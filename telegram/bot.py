@@ -1,5 +1,5 @@
 # pylint: disable=wrong-import-position
-
+import datetime
 import re
 
 import django
@@ -39,46 +39,92 @@ def cmd_start(message: Message) -> None:
     bot.reply_to(message, escape('You have been registered'))
 
 
-@bot.message_handler(commands=['subscribe'])
-def cmd_subscribe(message: Message) -> None:
+_subscribe_tag_regex = re.compile(r"^/subscribe\s+.*tag\s+#?(\w+)\s*$", flags=re.IGNORECASE)
+
+
+@bot.message_handler(regexp=_subscribe_tag_regex.pattern)
+def cmd_subscribe_tag(message: Message) -> None:
     chat = update_chat(message)
-    value_match = re.search(r"^/subscribe\s*(.*)", message.text)
+    value_match = _subscribe_tag_regex.search(message.text)
     if not value_match:
-        return
-
-    value = value_match.group(1).strip()
-    if value.startswith('#'):
-        tag_id = recipes.models.Tag.id_from_name(value)
-        tag, _ = recipes.models.Tag.objects.get_or_create(pk=tag_id)
-        telegram.models.Subscription.objects.get_or_create(chat=chat, tag=tag, author=None)
-        msg = f"Subscribed to #{tag.name or value}"
+        raise ValueError(f"Cannot find matches for regex {_subscribe_tag_regex} in text '{message.text}'")
+    value = value_match.group(1)
+    tag_id = recipes.models.Tag.id_from_name(value)
+    try:
+        tag = recipes.models.Tag.objects.get(pk=tag_id)
+    except recipes.models.Tag.DoesNotExist:
+        bot.reply_to(message, escape(f"Tag #{value} does not exist"))
     else:
-        author_id = recipes.models.Author.id_from_name(value)
-        author, _ = recipes.models.Author.objects.get_or_create(pk=author_id)
-        telegram.models.Subscription.objects.get_or_create(chat=chat, tag=None, author=author)
-        msg = f"Subscribed to {author.name or value}"
-    bot.reply_to(message, escape(msg))
+        telegram.models.TagSubscription.objects.get_or_create(
+            chat=chat,
+            tag=tag,
+            defaults={'last_recipe_date': datetime.datetime.utcnow()},
+        )
+        bot.reply_to(message, escape(f"Subscribed to tag #{tag.name}"))
 
 
-@bot.message_handler(commands=['unsubscribe'])
-def cmd_unsubscribe(message: Message) -> None:
+_unsubscribe_tag_regex = re.compile(r"^/unsubscribe\s+.*tag\s+#?(\w+)\s*$", flags=re.IGNORECASE)
+
+
+@bot.message_handler(regexp=_unsubscribe_tag_regex.pattern)
+def cmd_unsubscribe_tag(message: Message) -> None:
     chat = update_chat(message)
-    value_match = re.search(r"^/unsubscribe\s*(.*)", message.text)
+    value_match = _unsubscribe_tag_regex.search(message.text)
     if not value_match:
-        return
-
-    value = value_match.group(1).strip()
-    if value.startswith('#'):
-        tag_id = recipes.models.Tag.id_from_name(value)
-        tag, _ = recipes.models.Tag.objects.get_or_create(pk=tag_id)
-        telegram.models.Subscription.objects.filter(chat=chat, tag=tag, author=None).delete()
-        msg = f"Unsubscribed from #{tag.name or value}"
+        raise ValueError(f"Cannot find matches for regex {_unsubscribe_tag_regex} in text '{message.text}'")
+    value = value_match.group(1)
+    tag_id = recipes.models.Tag.id_from_name(value)
+    try:
+        tag = recipes.models.Tag.objects.get(pk=tag_id)
+    except recipes.models.Tag.DoesNotExist:
+        bot.reply_to(message, escape(f"Tag #{value} does not exist"))
     else:
-        author_id = recipes.models.Author.id_from_name(value)
-        author, _ = recipes.models.Author.objects.get_or_create(pk=author_id)
-        telegram.models.Subscription.objects.filter(chat=chat, tag=None, author=author).delete()
-        msg = f"Unsubscribed from {author.name or value}"
-    bot.reply_to(message, escape(msg))
+        telegram.models.TagSubscription.objects.filter(chat=chat, tag=tag).delete()
+        bot.reply_to(message, escape(f"Unsubscribed from tag #{tag.name}"))
+
+
+_subscribe_author_regex = re.compile(r"^/subscribe\s+.*author\s+(.*)\s*$", flags=re.IGNORECASE)
+
+
+@bot.message_handler(regexp=_subscribe_author_regex.pattern)
+def cmd_subscribe_author(message: Message) -> None:
+    chat = update_chat(message)
+    value_match = _subscribe_author_regex.search(message.text)
+    if not value_match:
+        raise ValueError(f"Cannot find matches for regex {_subscribe_author_regex} in text '{message.text}'")
+    value = value_match.group(1)
+    author_id = recipes.models.Author.id_from_name(value)
+    try:
+        author = recipes.models.Author.objects.get(pk=author_id)
+    except recipes.models.Author.DoesNotExist:
+        bot.reply_to(message, escape(f"Author '{value}' does not exist"))
+    else:
+        telegram.models.AuthorSubscription.objects.get_or_create(
+            chat=chat,
+            author=author,
+            defaults={'last_recipe_date': datetime.datetime.utcnow()},
+        )
+        bot.reply_to(message, escape(f"Subscribed to {author.name}"))
+
+
+_unsubscribe_author_regex = re.compile(r"^/unsubscribe\s+.*author\s+(.*)\s*$", flags=re.IGNORECASE)
+
+
+@bot.message_handler(regexp=_unsubscribe_author_regex.pattern)
+def cmd_unsubscribe_author(message: Message) -> None:
+    chat = update_chat(message)
+    value_match = _unsubscribe_author_regex.search(message.text)
+    if not value_match:
+        raise ValueError(f"Cannot find matches for regex {_unsubscribe_author_regex} in text '{message.text}'")
+    value = value_match.group(1)
+    author_id = recipes.models.Author.id_from_name(value)
+    try:
+        author = recipes.models.Author.objects.get(pk=author_id)
+    except recipes.models.Author.DoesNotExist:
+        bot.reply_to(message, escape(f"Author '{value}' does not exist"))
+    else:
+        telegram.models.AuthorSubscription.objects.filter(chat=chat, author=author).delete()
+        bot.reply_to(message, escape(f"Unsubscribed from {author.name}"))
 
 
 @bot.message_handler(commands=['random'])
@@ -89,3 +135,8 @@ def cmd_random(message: Message) -> None:
         chat_id=chat.id,
         text=recipe_to_message(recipe),
     )
+
+
+@bot.message_handler()
+def cmd_unknown(message: Message) -> None:
+    bot.reply_to(message, escape('Command not recognized'))

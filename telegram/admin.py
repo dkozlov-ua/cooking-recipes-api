@@ -3,31 +3,41 @@ from django.contrib import admin
 from telegram import models
 
 
-class SubscriptionAdminInline(admin.TabularInline):
-    model = models.Subscription
-    fields = ['title', 'last_recipe_pub_date']
-    readonly_fields = ['title', 'last_recipe_pub_date']
+class TagSubscriptionAdminInline(admin.TabularInline):
+    model = models.TagSubscription
+    fields = ['tag', 'last_recipe_date']
+    readonly_fields = ['tag', 'last_recipe_date']
     extra = 0
 
-    @staticmethod
-    @admin.display(description='Title')
-    def title(obj: models.Subscription) -> str:
-        return str(obj)
+
+class AuthorSubscriptionAdminInline(admin.TabularInline):
+    model = models.AuthorSubscription
+    fields = ['author', 'last_recipe_date']
+    readonly_fields = ['author', 'last_recipe_date']
+    extra = 0
 
 
 @admin.register(models.Chat)
 class ChatAdmin(admin.ModelAdmin):
-    list_display = ['id', 'username', 'first_name', 'last_name', 'last_seen_date']
-    fields = ['id', 'username', ('first_name', 'last_name'), 'last_seen_date']
-    sortable_by = 'id'
+    list_display = ['username', 'id', 'first_name', 'last_name', 'last_seen_date']
+    fields = ['username', 'id', ('first_name', 'last_name'), 'last_seen_date']
+    sortable_by = ['id', 'username', 'last_seen_date']
     readonly_fields = ['last_seen_date']
     view_on_site = False
-    inlines = [SubscriptionAdminInline]
+    inlines = [TagSubscriptionAdminInline, AuthorSubscriptionAdminInline]
 
 
-@admin.register(models.Subscription)
-class SubscriptionAdmin(admin.ModelAdmin):
-    list_display = ['__str__', 'last_recipe_pub_date']
+@admin.register(models.TagSubscription)
+class TagSubscriptionAdmin(admin.ModelAdmin):
+    list_display = ['chat', 'tag', 'last_recipe_date']
     list_select_related = True
-    readonly_fields = ['chat', 'tag', 'author']
+    readonly_fields = ['chat', 'tag']
+    view_on_site = False
+
+
+@admin.register(models.AuthorSubscription)
+class AuthorSubscriptionAdmin(admin.ModelAdmin):
+    list_display = ['chat', 'author', 'last_recipe_date']
+    list_select_related = True
+    readonly_fields = ['chat', 'author']
     view_on_site = False

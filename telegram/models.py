@@ -1,6 +1,4 @@
 from django.db import models
-from django.db.models.functions import Coalesce
-from django.db.models.query import Q
 
 import recipes.models
 
@@ -16,27 +14,29 @@ class Chat(models.Model):
         return f"@{self.username} ({self.first_name} {self.last_name})"
 
 
-class Subscription(models.Model):
-    chat = models.ForeignKey(Chat, related_name='subscriptions', on_delete=models.CASCADE)
-    tag = models.ForeignKey(recipes.models.Tag, related_name='subscriptions', on_delete=models.CASCADE, null=True)
-    author = models.ForeignKey(recipes.models.Author, related_name='subscriptions', on_delete=models.CASCADE, null=True)
-    last_recipe_pub_date = models.DateTimeField(auto_now_add=True)
+class TagSubscription(models.Model):
+    chat = models.ForeignKey(Chat, related_name='tag_subscriptions', on_delete=models.CASCADE)
+    tag = models.ForeignKey(recipes.models.Tag, related_name='tag_subscriptions', on_delete=models.CASCADE)
+    last_recipe_date = models.DateTimeField()
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(
-                Coalesce('tag', 'author'),
-                Coalesce('author', 'tag'),
-                'chat',
-                name='unique_subscription',
-            ),
-            models.CheckConstraint(
-                check=Q(tag__isnull=False) | Q(author__isnull=False),
-                name='tag_or_author_not_null',
-            ),
+            models.UniqueConstraint(fields=('chat', 'tag'), name='unique_tag_subscription'),
         ]
 
     def __str__(self) -> str:
-        if self.tag:
-            return f"{self.chat_id} -> #{self.tag_id}"
+        return f"{self.chat_id} -> #{self.tag_id}"
+
+
+class AuthorSubscription(models.Model):
+    chat = models.ForeignKey(Chat, related_name='author_subscriptions', on_delete=models.CASCADE)
+    author = models.ForeignKey(recipes.models.Author, related_name='author_subscriptions', on_delete=models.CASCADE)
+    last_recipe_date = models.DateTimeField()
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=('chat', 'author'), name='unique_author_subscription'),
+        ]
+
+    def __str__(self) -> str:
         return f"{self.chat_id} -> {self.author_id}"
