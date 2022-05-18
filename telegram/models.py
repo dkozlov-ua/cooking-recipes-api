@@ -17,9 +17,9 @@ class Chat(models.Model):
 
 
 class Subscription(models.Model):
-    chat = models.ForeignKey(Chat, on_delete=models.CASCADE)
-    tag = models.ForeignKey(recipes.models.Tag, on_delete=models.CASCADE, null=True)
-    author = models.ForeignKey(recipes.models.Author, on_delete=models.CASCADE, null=True)
+    chat = models.ForeignKey(Chat, related_name='subscriptions', on_delete=models.CASCADE)
+    tag = models.ForeignKey(recipes.models.Tag, related_name='subscriptions', on_delete=models.CASCADE, null=True)
+    author = models.ForeignKey(recipes.models.Author, related_name='subscriptions', on_delete=models.CASCADE, null=True)
     last_recipe_pub_date = models.DateTimeField(auto_now_add=True)
 
     class Meta:

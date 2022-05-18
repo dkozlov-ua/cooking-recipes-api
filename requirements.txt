@@ -11,6 +11,7 @@ djangorestframework-stubs
 gunicorn
 mypy
 psycopg2-binary
+pygments
 pylint
 pylint-django
 pyTelegramBotAPI
