@@ -85,7 +85,14 @@ def _parse_ba_recipe(data: Dict) -> Tuple[Recipe, List[Tag], List[Author]]:
                 data['contributors'].get('author') or [],
                 data['contributors'].get('chef') or [],
         ):
-            for author_name in author_row['name'].split(' & '):
+            for author_name in author_row['name'].strip().split(' & '):
+                author_name = author_name.strip()
+                if (
+                        not author_name
+                        or ',' in author_name
+                        or len(author_name.split()) > 3
+                ):
+                    continue
                 author = Author(
                     id=Author.id_from_name(author_name),
                     name=author_name,
