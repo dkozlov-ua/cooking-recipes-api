@@ -2,6 +2,7 @@ celery[redis]
 click
 dateparser
 django>=4.0
+django-grappelli
 django-celery-beat
 django-environ
 django-filter
@@ -11,7 +12,6 @@ djangorestframework-stubs
 gunicorn
 mypy
 psycopg2-binary
-pygments
 pylint
 pylint-django
 pyTelegramBotAPI

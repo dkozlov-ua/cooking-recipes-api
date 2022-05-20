@@ -30,6 +30,7 @@ class ChatAdmin(admin.ModelAdmin):
 @admin.register(models.TagSubscription)
 class TagSubscriptionAdmin(admin.ModelAdmin):
     list_display = ['chat', 'tag', 'last_recipe_date']
+    list_filter = ['chat', 'tag']
     list_select_related = True
     readonly_fields = ['chat', 'tag']
     view_on_site = False
@@ -38,6 +39,7 @@ class TagSubscriptionAdmin(admin.ModelAdmin):
 @admin.register(models.AuthorSubscription)
 class AuthorSubscriptionAdmin(admin.ModelAdmin):
     list_display = ['chat', 'author', 'last_recipe_date']
+    list_filter = ('chat', "author")
     list_select_related = True
     readonly_fields = ['chat', 'author']
     view_on_site = False

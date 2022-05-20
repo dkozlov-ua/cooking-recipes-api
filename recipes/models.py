@@ -1,5 +1,7 @@
 import re
 
+from django.contrib.postgres.indexes import GinIndex
+from django.contrib.postgres.search import SearchVectorField
 from django.db import models
 from django.db.models import F
 
@@ -50,11 +52,14 @@ class Recipe(models.Model):
     tags = models.ManyToManyField(Tag, related_name='recipes')
     authors = models.ManyToManyField(Author, related_name='recipes')
 
+    main_tsvector = SearchVectorField()
+
     class Meta:
         ordering = [F('pub_date').desc(nulls_last=True)]
         get_latest_by = 'pub_date'
         indexes = [
             models.Index(fields=['pub_date']),
+            GinIndex('main_tsvector', name='main_tsvector_idx'),
         ]
 
     def __str__(self) -> str:

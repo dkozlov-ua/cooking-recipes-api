@@ -8,6 +8,7 @@ from typing import List, Tuple, Optional, Dict, Union
 
 import dateparser
 import requests
+from django.contrib.postgres.search import SearchVector
 from django.db import transaction
 
 from recipes.models import Recipe, Tag, Author
@@ -154,6 +155,11 @@ def bonappetit(from_date: Optional[datetime.datetime], from_page: int = 1) -> Tu
 
                 recipe, tags, authors = _parse_ba_recipe(row)
 
+                recipe.save()
+                recipe.main_tsvector=SearchVector(
+                    'name', 'title', 'description', 'short_description', 'ingredient_groups',
+                    config='english',
+                )
                 recipe.save()
                 for tag in tags:
                     tag.save()

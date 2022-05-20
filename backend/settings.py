@@ -47,6 +47,7 @@ DATABASES = {
 
 # Application definition
 INSTALLED_APPS = [
+    'grappelli',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -124,3 +125,7 @@ CELERY_IGNORE_RESULT = True
 
 # Telegram settings
 TELEGRAM_BOT_TOKEN = env('TELEGRAM_BOT_TOKEN', default='TELEGRAM_BOT_TOKEN_NOT_SET')
+
+# Grappelli settings
+# https://django-grappelli.readthedocs.io/en/latest
+GRAPPELLI_ADMIN_TITLE = 'Cooking Recipes API'
