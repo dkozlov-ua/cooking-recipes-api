@@ -141,14 +141,13 @@ def _cmd_unsubscribe_author(message: Message) -> None:
         bot.reply_to(message, escape(f"Unsubscribed from {author.name}"))
 
 
-@bot.message_handler(commands=['random'])
-def _cmd_random_recipe(message: Message) -> None:
-    chat = _update_chat(message)
-    recipe = recipes.models.Recipe.objects.all().order_by('?')[0]
-    bot.send_message(
-        chat_id=chat.id,
-        text=recipe_to_message(recipe),
+def _format_recipe_msg(recipe: recipes.models.Recipe) -> Tuple[str, InlineKeyboardMarkup]:
+    msg_text = recipe_to_message(recipe)
+    msg_markup = InlineKeyboardMarkup()
+    msg_markup.row(
+        InlineKeyboardButton(text='❌', callback_data=f"recipe/{recipe.id}/delete"),
     )
+    return msg_text, msg_markup
 
 
 def _get_search_recipes_queryset(query: str) -> QuerySet[recipes.models.Recipe]:
@@ -162,7 +161,7 @@ def _format_search_recipes_msg(results: List[recipes.models.Recipe]) -> Tuple[st
         result_message_rows.append(
             f"{i}\\. {recipe_to_search_result(recipe)}"
         )
-        button = InlineKeyboardButton(text=str(i), callback_data=f"showRecipe/{recipe.id}")
+        button = InlineKeyboardButton(text=str(i), callback_data=f"recipe/{recipe.id}/show")
         if i <= 5:
             result_message_markup_rows[0].append(button)
         else:
@@ -175,9 +174,9 @@ def _format_search_recipes_msg(results: List[recipes.models.Recipe]) -> Tuple[st
     if result_message_markup_rows[1]:
         result_message_markup.row(*result_message_markup_rows[1])
     result_message_markup.row(
-        InlineKeyboardButton(text='⬅', callback_data='searchRecipe/previousPage'),
-        InlineKeyboardButton(text='❌', callback_data='searchRecipe/delete'),
-        InlineKeyboardButton(text='➡', callback_data='searchRecipe/nextPage'),
+        InlineKeyboardButton(text='⬅', callback_data='searchRecipes/previousPage'),
+        InlineKeyboardButton(text='❌', callback_data='searchRecipes/delete'),
+        InlineKeyboardButton(text='➡', callback_data='searchRecipes/nextPage'),
     )
 
     return result_message_text, result_message_markup
@@ -214,7 +213,19 @@ def _cmd_search_recipes(message: Message) -> None:
         bot.reply_to(message, 'Recipes not found')
 
 
-@bot.callback_query_handler(func=lambda cb_query: cb_query.data.startswith('searchRecipe/'))
+@bot.message_handler(commands=['random'])
+def _cmd_random_recipe(message: Message) -> None:
+    chat = _update_chat(message)
+    recipe = recipes.models.Recipe.objects.all().order_by('?')[0]
+    msg_text, msg_markup = _format_recipe_msg(recipe)
+    bot.send_message(
+        chat_id=chat.id,
+        text=msg_text,
+        reply_markup=msg_markup,
+    )
+
+
+@bot.callback_query_handler(func=lambda cb_query: cb_query.data.startswith('searchRecipes/'))
 def _cb_search_recipe(cb_query: CallbackQuery) -> None:
     chat = _update_chat(cb_query.message)
     _, cmd = cb_query.data.split('/')
@@ -256,15 +267,23 @@ def _cb_search_recipe(cb_query: CallbackQuery) -> None:
     search_request.save()
 
 
-@bot.callback_query_handler(func=lambda cb_query: cb_query.data.startswith('showRecipe/'))
-def _cb_show_recipe(cb_query: CallbackQuery) -> None:
+@bot.callback_query_handler(func=lambda cb_query: cb_query.data.startswith('recipe/'))
+def _cb_recipe(cb_query: CallbackQuery) -> None:
     chat = _update_chat(cb_query.message)
-    _, recipe_id = cb_query.data.split('/')
-    recipe = recipes.models.Recipe.objects.get(id=recipe_id)
-    bot.send_message(
-        chat_id=chat.id,
-        text=recipe_to_message(recipe),
-    )
+    _, recipe_id, cmd = cb_query.data.split('/')
+    if cmd == 'show':
+        recipe = recipes.models.Recipe.objects.get(id=recipe_id)
+        msg_text, msg_markup = _format_recipe_msg(recipe)
+        bot.send_message(
+            chat_id=chat.id,
+            text=msg_text,
+            reply_markup=msg_markup,
+        )
+    elif cmd == 'delete':
+        bot.delete_message(
+            chat_id=cb_query.message.chat.id,
+            message_id=cb_query.message.message_id,
+        )
 
 
 @bot.message_handler()
