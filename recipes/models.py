@@ -77,6 +77,7 @@ class Recipe(models.Model):
             return queryset.filter(main_tsvector=tsquery)
         if scope == 'essentials':
             return queryset.filter(essentials_tsvector=tsquery)
+        raise ValueError(f"Unknown scope: {scope}")
 
     def __str__(self) -> str:
         return str(self.title)
