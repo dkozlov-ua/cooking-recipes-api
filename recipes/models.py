@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 import re
+from typing import Optional
 
 from django.contrib.postgres.indexes import GinIndex
-from django.contrib.postgres.search import SearchVectorField
+from django.contrib.postgres.search import SearchVectorField, SearchQuery
 from django.db import models
-from django.db.models import F
+from django.db.models import F, QuerySet
 
 
 class Tag(models.Model):
@@ -61,6 +64,13 @@ class Recipe(models.Model):
             models.Index(fields=['pub_date']),
             GinIndex('main_tsvector', name='main_tsvector_idx'),
         ]
+
+    @classmethod
+    def text_search(cls, query: str, queryset: Optional[QuerySet[Recipe]] = None) -> QuerySet[Recipe]:
+        if queryset is None:
+            queryset = cls.objects.all()
+        tsquery = SearchQuery(query, config='english', search_type='websearch')
+        return queryset.filter(main_tsvector=tsquery)
 
     def __str__(self) -> str:
         return str(self.title)

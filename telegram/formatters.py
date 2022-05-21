@@ -53,3 +53,11 @@ def recipe_to_message(recipe: recipes.models.Recipe) -> str:
         f"\n\n"
         f"{tags_str}"
     ).replace('\n\n\n\n', '\n\n')
+
+
+def recipe_to_search_result(recipe: recipes.models.Recipe) -> str:
+    url = escape(recipe.url, 'link')
+    title = escape(recipe.title)
+    rating = escape(f"{recipe.rating:.1f}/{5.0:.1f}")
+    reviews_count = escape(f"{recipe.reviews_count}")
+    return f"[{title}]({url}) \\({rating}, {reviews_count} reviews\\)"

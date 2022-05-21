@@ -40,3 +40,13 @@ class AuthorSubscription(models.Model):
 
     def __str__(self) -> str:
         return f"{self.chat_id} -> {self.author_id}"
+
+
+class SearchRequestMessage(models.Model):
+    message_id = models.BigIntegerField()
+    chat = models.ForeignKey(Chat, related_name='search_messages', on_delete=models.CASCADE)
+    query = models.TextField()
+    page_n = models.IntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    modified_at = models.DateTimeField(auto_now=True)
+    is_deleted = models.BooleanField(default=False)
