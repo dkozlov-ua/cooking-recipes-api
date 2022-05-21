@@ -156,8 +156,12 @@ def bonappetit(from_date: Optional[datetime.datetime], from_page: int = 1) -> Tu
                 recipe, tags, authors = _parse_ba_recipe(row)
 
                 recipe.save()
-                recipe.main_tsvector=SearchVector(
+                recipe.full_text_tsvector = SearchVector(
                     'name', 'title', 'description', 'short_description', 'ingredient_groups',
+                    config='english',
+                )
+                recipe.essentials_tsvector = SearchVector(
+                    'title', 'short_description',
                     config='english',
                 )
                 recipe.save()

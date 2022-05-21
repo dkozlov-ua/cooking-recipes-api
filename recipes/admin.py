@@ -54,7 +54,7 @@ class RecipeAdmin(admin.ModelAdmin):
             request, queryset, search_term,
         )
         query = SearchQuery(search_term, config='english', search_type='websearch')
-        queryset |= self.model.objects.filter(main_tsvector=query)
+        queryset |= self.model.objects.filter(essentials_tsvector=query)
         return queryset, may_have_duplicates
 
 

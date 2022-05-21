@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Optional
+from typing import Optional, Literal
 
 from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.search import SearchVectorField, SearchQuery
@@ -55,22 +55,28 @@ class Recipe(models.Model):
     tags = models.ManyToManyField(Tag, related_name='recipes')
     authors = models.ManyToManyField(Author, related_name='recipes')
 
-    main_tsvector = SearchVectorField()
+    full_text_tsvector = SearchVectorField()
+    essentials_tsvector = SearchVectorField()
 
     class Meta:
         ordering = [F('pub_date').desc(nulls_last=True)]
         get_latest_by = 'pub_date'
         indexes = [
             models.Index(fields=['pub_date']),
-            GinIndex('main_tsvector', name='main_tsvector_idx'),
+            GinIndex('full_text_tsvector', name='full_text_tsvector_idx'),
+            GinIndex('essentials_tsvector', name='essentials_tsvector_idx'),
         ]
 
     @classmethod
-    def text_search(cls, query: str, queryset: Optional[QuerySet[Recipe]] = None) -> QuerySet[Recipe]:
+    def text_search(cls, query: str, scope: Literal['full_text', 'essentials'] = 'essentials',
+                    queryset: Optional[QuerySet[Recipe]] = None) -> QuerySet[Recipe]:
         if queryset is None:
             queryset = cls.objects.all()
         tsquery = SearchQuery(query, config='english', search_type='websearch')
-        return queryset.filter(main_tsvector=tsquery)
+        if scope == 'full_text':
+            return queryset.filter(main_tsvector=tsquery)
+        if scope == 'essentials':
+            return queryset.filter(essentials_tsvector=tsquery)
 
     def __str__(self) -> str:
         return str(self.title)
