@@ -55,6 +55,7 @@ def format_recipe_msg(recipe: recipes.models.Recipe) -> Tuple[str, InlineKeyboar
 
     msg_markup = InlineKeyboardMarkup()
     msg_markup.row(
+        InlineKeyboardButton(text='❤', callback_data=f"recipe/{recipe.id}/like"),
         InlineKeyboardButton(text='❌', callback_data=f"recipe/{recipe.id}/delete"),
     )
     return msg_text, msg_markup

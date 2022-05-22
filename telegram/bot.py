@@ -24,8 +24,10 @@ bot = telebot.TeleBot(
 )
 logger = logging.getLogger(__name__)
 
-PAGE_SIZE = 10
+SEARCH_PAGE_SIZE = 10
+LIKED_PAGE_SIZE = 10
 CALLBACK_SEARCH_RECIPES = 'searchRecipes'
+CALLBACK_LIKED_RECIPES = 'likedRecipes'
 
 
 def _update_chat(message: Message) -> telegram.models.Chat:
@@ -156,17 +158,40 @@ def _cmd_search_recipes(message: Message) -> None:
         query=value.casefold(),
         page_n=0,
     )
-    results_page = search_request.current_page(page_size=PAGE_SIZE)
+    results_page = search_request.current_page(page_size=SEARCH_PAGE_SIZE)
     if results_page:
         msg_text, msg_markup = format_recipes_list_msg(results_page, callback_data_prefix=CALLBACK_SEARCH_RECIPES)
-        result_message = bot.send_message(
+        search_request_message = bot.send_message(
             chat_id=message.chat.id,
             text=msg_text,
             reply_markup=msg_markup,
             disable_web_page_preview=True,
         )
-        search_request.message_id = result_message.message_id
+        search_request.message_id = search_request_message.message_id
         search_request.save()
+    else:
+        bot.reply_to(message, 'Recipes not found')
+
+
+@bot.message_handler(commands=['liked'])
+def _cmd_liked_recipes(message: Message) -> None:
+    chat = _update_chat(message)
+
+    liked_list = telegram.models.LikedListMessage(
+        chat=chat,
+        page_n=0,
+    )
+    results_page = liked_list.current_page(page_size=LIKED_PAGE_SIZE)
+    if results_page:
+        msg_text, msg_markup = format_recipes_list_msg(results_page, callback_data_prefix=CALLBACK_LIKED_RECIPES)
+        liked_list_message = bot.send_message(
+            chat_id=message.chat.id,
+            text=msg_text,
+            reply_markup=msg_markup,
+            disable_web_page_preview=True,
+        )
+        liked_list.message_id = liked_list_message.message_id
+        liked_list.save()
     else:
         bot.reply_to(message, 'Recipes not found')
 
@@ -189,7 +214,7 @@ def _cmd_unknown(message: Message) -> None:
 
 
 @bot.callback_query_handler(func=lambda cb_query: cb_query.data.startswith(f"{CALLBACK_SEARCH_RECIPES}/"))
-def _cb_search_recipe(cb_query: CallbackQuery) -> None:
+def _cb_search_recipes(cb_query: CallbackQuery) -> None:
     chat = _update_chat(cb_query.message)
     _, cmd = cb_query.data.split('/')
     search_request = telegram.models.SearchRequestMessage.objects.get(message_id=cb_query.message.message_id, chat=chat)
@@ -201,9 +226,9 @@ def _cb_search_recipe(cb_query: CallbackQuery) -> None:
         search_request.is_deleted = True
     elif cmd in ('previousPage', 'nextPage'):
         if cmd == 'previousPage':
-            results_page = search_request.previous_page(page_size=PAGE_SIZE)
+            results_page = search_request.previous_page(page_size=SEARCH_PAGE_SIZE)
         elif cmd == 'nextPage':
-            results_page = search_request.next_page(page_size=PAGE_SIZE)
+            results_page = search_request.next_page(page_size=SEARCH_PAGE_SIZE)
         else:
             raise ValueError(f"Unknown cmd: {cmd}")
         if results_page:
@@ -220,6 +245,40 @@ def _cb_search_recipe(cb_query: CallbackQuery) -> None:
     else:
         raise ValueError(f"Unknown cmd: {cmd}")
     search_request.save()
+
+
+@bot.callback_query_handler(func=lambda cb_query: cb_query.data.startswith(f"{CALLBACK_LIKED_RECIPES}/"))
+def _cb_liked_recipes(cb_query: CallbackQuery) -> None:
+    chat = _update_chat(cb_query.message)
+    _, cmd = cb_query.data.split('/')
+    liked_list = telegram.models.LikedListMessage.objects.get(message_id=cb_query.message.message_id, chat=chat)
+    if cmd == 'delete':
+        bot.delete_message(
+            chat_id=chat.id,
+            message_id=liked_list.message_id,
+        )
+        liked_list.is_deleted = True
+    elif cmd in ('previousPage', 'nextPage'):
+        if cmd == 'previousPage':
+            results_page = liked_list.previous_page(page_size=LIKED_PAGE_SIZE)
+        elif cmd == 'nextPage':
+            results_page = liked_list.next_page(page_size=LIKED_PAGE_SIZE)
+        else:
+            raise ValueError(f"Unknown cmd: {cmd}")
+        if results_page:
+            msg_text, msg_markup = format_recipes_list_msg(results_page, callback_data_prefix=CALLBACK_LIKED_RECIPES)
+            bot.edit_message_text(
+                chat_id=cb_query.message.chat.id,
+                message_id=cb_query.message.message_id,
+                text=msg_text,
+                reply_markup=msg_markup,
+                disable_web_page_preview=True,
+            )
+        else:
+            bot.answer_callback_query(cb_query.id, 'Recipes not found')
+    else:
+        raise ValueError(f"Unknown cmd: {cmd}")
+    liked_list.save()
 
 
 @bot.callback_query_handler(func=lambda cb_query: cb_query.data.startswith('recipe/'))
@@ -239,3 +298,11 @@ def _cb_recipe(cb_query: CallbackQuery) -> None:
             chat_id=cb_query.message.chat.id,
             message_id=cb_query.message.message_id,
         )
+    elif cmd == 'like':
+        recipe = recipes.models.Recipe.objects.get(id=recipe_id)
+        if recipe in chat.liked_recipes.all():
+            chat.liked_recipes.remove(recipe)
+            bot.answer_callback_query(cb_query.id, 'Removed from liked recipes')
+        else:
+            chat.liked_recipes.add(recipe)
+            bot.answer_callback_query(cb_query.id, 'Added to liked recipes')
