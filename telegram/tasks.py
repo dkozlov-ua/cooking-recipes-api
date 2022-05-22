@@ -6,7 +6,7 @@ from celery.utils.log import get_task_logger
 from django.conf import settings
 
 import telegram.models
-from telegram.formatters import recipe_to_message
+from telegram.message import format_recipe_msg
 
 bot = telebot.TeleBot(
     token=settings.TELEGRAM_BOT_TOKEN,
@@ -35,9 +35,11 @@ def send_recipes_for_subscription(subscription: AnySubscription) -> None:
     for recipe in recipes_list:
         logger.debug(f"Sending recipe '{recipe}' to {subscription.chat.id}")
         if recipe.pub_date:
+            msg_text, msg_markup = format_recipe_msg(recipe)
             bot.send_message(
                 chat_id=subscription.chat.id,
-                text=recipe_to_message(recipe),
+                text=msg_text,
+                reply_markup=msg_markup,
             )
             subscription.last_recipe_date = recipe.pub_date
             subscription.save()

@@ -10,6 +10,7 @@ django-stubs
 djangorestframework
 djangorestframework-stubs
 gunicorn
+more_itertools
 mypy
 psycopg2-binary
 pylint

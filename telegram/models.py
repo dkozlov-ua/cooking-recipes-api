@@ -1,4 +1,7 @@
+from typing import List
+
 from django.db import models
+from django.db.models import QuerySet
 
 import recipes.models
 
@@ -50,3 +53,28 @@ class SearchRequestMessage(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     modified_at = models.DateTimeField(auto_now=True)
     is_deleted = models.BooleanField(default=False)
+
+    def get_queryset(self) -> QuerySet[recipes.models.Recipe]:
+        return recipes.models.Recipe.text_search(self.query).order_by('-reviews_count', '-rating', '-pub_date')
+
+    def get_page(self, page_n: int, page_size: int) -> List[recipes.models.Recipe]:
+        start_idx = page_size * page_n
+        end_idx = page_size * (page_n + 1)
+        return list(self.get_queryset()[start_idx:end_idx])
+
+    def current_page(self, page_size: int) -> List[recipes.models.Recipe]:
+        return self.get_page(self.page_n, page_size)
+
+    def previous_page(self, page_size: int) -> List[recipes.models.Recipe]:
+        if self.page_n == 0:
+            return []
+        page = self.get_page(self.page_n - 1, page_size)
+        if page:
+            self.page_n -= 1
+        return page
+
+    def next_page(self, page_size: int) -> List[recipes.models.Recipe]:
+        page = self.get_page(self.page_n + 1, page_size)
+        if page:
+            self.page_n += 1
+        return page
