@@ -30,13 +30,13 @@ def format_recipe_msg(recipe: recipes.models.Recipe) -> Tuple[str, InlineKeyboar
     )
 
     authors_list: Tuple[recipes.models.Author, ...] = tuple(recipe.authors.all())
-    if recipe.authors:
+    if authors_list:
         authors_str = 'By ' + ', '.join(f"_{escape(author.name or author.id)}_" for author in authors_list)
     else:
         authors_str = ''
 
     tags_list: Tuple[recipes.models.Tag, ...] = tuple(recipe.tags.all())
-    if recipe.tags:
+    if tags_list:
         tags_str = ' '.join(f"\\#{escape(tag.name or tag.id)}" for tag in tags_list)
     else:
         tags_str = ''
