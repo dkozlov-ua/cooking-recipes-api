@@ -5,7 +5,7 @@ import unicodedata
 from typing import Optional, Literal
 
 from django.contrib.postgres.indexes import GinIndex
-from django.contrib.postgres.search import SearchVectorField, SearchQuery, SearchVector
+from django.contrib.postgres.search import SearchVectorField, SearchQuery, SearchVector, TrigramSimilarity
 from django.db import models
 from django.db.models import F, QuerySet
 
@@ -16,6 +16,9 @@ class Tag(models.Model):
 
     class Meta:
         ordering = ['id']
+        indexes = [
+            GinIndex(fields=['name'], opclasses=['gin_trgm_ops'], name='tag_name_gin_trgm_idx'),
+        ]
 
     @staticmethod
     def id_from_name(name: str) -> str:
@@ -41,8 +44,24 @@ class Tag(models.Model):
 
         name = unicodedata.normalize('NFKC', name)
         name = re.sub(r"'s", '', name)
-        name = re.sub(r"\W+", '', name)
+        name = re.sub(r"\s+", ' ', name)
         return name
+
+    @classmethod
+    def fuzzy_search(cls, name: str) -> Optional[Tag]:
+        """Find a `Tag` object using fuzzy search technics.
+
+        :param name: a verbose tag's name.
+        :return: a `Tag` object or None.
+        """
+
+        try:
+            return cls.objects \
+                .annotate(similarity=TrigramSimilarity('name', name)) \
+                .filter(similarity__gt=0.3) \
+                .order_by('-similarity')[0]
+        except IndexError:
+            return None
 
     def __str__(self) -> str:
         return str(self.name or self.id)
@@ -54,6 +73,9 @@ class Author(models.Model):
 
     class Meta:
         ordering = ['id']
+        indexes = [
+            GinIndex(fields=['name'], opclasses=['gin_trgm_ops'], name='author_name_gin_trgm_idx'),
+        ]
 
     @staticmethod
     def id_from_name(name: str) -> str:
@@ -80,6 +102,22 @@ class Author(models.Model):
         name = unicodedata.normalize('NFKC', name)
         name = re.sub(r"\s+", ' ', name)
         return name
+
+    @classmethod
+    def fuzzy_search(cls, name: str) -> Optional[Author]:
+        """Find an `Author` object using fuzzy search technics.
+
+        :param name: a verbose tag's name.
+        :return: a `Author` object or None.
+        """
+
+        try:
+            return cls.objects \
+                .annotate(similarity=TrigramSimilarity('name', name)) \
+                .filter(similarity__gt=0.3) \
+                .order_by('-similarity')[0]
+        except IndexError:
+            return None
 
     def __str__(self) -> str:
         return str(self.name or self.id)
