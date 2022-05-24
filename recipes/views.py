@@ -42,7 +42,7 @@ class RecipeViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['POST'])
     def scrape(request: Request) -> Response:
         if request.query_params.get('from_date'):
-            from_date = dateparser.parse(request.query_params['from_date'])
+            from_date = dateparser.parse(str(request.query_params['from_date']))
         else:
             from_date = None
         from_page = int(request.query_params.get('from_page') or 1)
