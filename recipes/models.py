@@ -12,7 +12,7 @@ from django.db.models import F, QuerySet
 
 class Tag(models.Model):
     id = models.TextField(primary_key=True)
-    name = models.TextField(null=True)
+    name = models.TextField()
 
     class Meta:
         ordering = ['id']
@@ -50,7 +50,7 @@ class Tag(models.Model):
 
 class Author(models.Model):
     id = models.TextField(primary_key=True)
-    name = models.TextField(null=True)
+    name = models.TextField()
 
     class Meta:
         ordering = ['id']

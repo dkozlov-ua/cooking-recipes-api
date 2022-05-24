@@ -2,6 +2,7 @@
 import datetime
 import logging
 import re
+from typing import Optional, Union
 
 import django
 import requests
@@ -30,142 +31,206 @@ CALLBACK_SEARCH_RECIPES = 'searchRecipes'
 CALLBACK_LIKED_RECIPES = 'likedRecipes'
 
 
-_subscribe_tag_regex = re.compile(r"^/subscribe\s+.*tag\s+#?(\w+)\s*$", flags=re.IGNORECASE)
+class TagNotFoundError(Exception):
+    def __init__(self, name: str, *args):
+        super().__init__(*args)
+        self.tag_name = name
+
+    def __str__(self) -> str:
+        return self.tag_name
 
 
-@bot.message_handler(regexp=_subscribe_tag_regex.pattern)
-def _cmd_subscribe_tag(message: Message) -> None:
-    """Handler for bot command "subscribe to the tag"
+class AuthorNotFoundError(Exception):
+    def __init__(self, name: str, *args):
+        super().__init__(*args)
+        self.author_name = name
+
+    def __str__(self) -> str:
+        return self.author_name
+
+
+class AmbiguousCommandSubject(Exception):
+    def __init__(self, tag: Tag, author: Author, *args):
+        super().__init__(*args)
+        self.tag = tag
+        self.author = author
+
+    def __str__(self) -> str:
+        return f"{self.tag} or {self.author}"
+
+
+def _get_command_subject(params: str) -> Union[Tag, Author, None]:
+    tag: Optional[Tag]
+    author: Optional[Author]
+    if re.match(r"^tag\s+|#.*$", params, flags=re.IGNORECASE):
+        tag_name = re.sub(r"(^tag\s+#?)|(\s+)", '', params, flags=re.IGNORECASE)
+        try:
+            return Tag.objects.get(id=Tag.id_from_name(tag_name))
+        except Tag.DoesNotExist as exc:
+            raise TagNotFoundError(name=tag_name) from exc
+    elif re.match(r"^author\s+.*$", params, flags=re.IGNORECASE):
+        author_name = re.sub(r"^author\s+", '', params, flags=re.IGNORECASE)
+        try:
+            return Author.objects.get(id=Author.id_from_name(author_name))
+        except Author.DoesNotExist as exc:
+            raise AuthorNotFoundError(name=author_name) from exc
+    else:
+        try:
+            author = Author.objects.get(id=Author.id_from_name(params))
+        except Author.DoesNotExist:
+            author = None
+        try:
+            tag = Tag.objects.get(id=Tag.id_from_name(params))
+        except Tag.DoesNotExist:
+            tag = None
+        if tag and author:
+            raise AmbiguousCommandSubject(tag=tag, author=author)
+        return tag or author
+
+
+@bot.message_handler(commands=['subscribe'])
+def _cmd_subscribe(message: Message) -> None:
+    """Handler for bot command "/subscribe"
 
     :param message: Telegram message
     """
 
     chat = Chat.update_from_message(message)
-
-    value_match = _subscribe_tag_regex.search(message.text)
-    if not value_match:
-        raise ValueError(f"Cannot find matches for regex {_subscribe_tag_regex} in text '{message.text}'")
-    value = value_match.group(1)
-
-    tag_id = Tag.id_from_name(value)
-    try:
-        tag = Tag.objects.get(pk=tag_id)
-    except Tag.DoesNotExist:
-        bot.reply_to(message, escape(f"Tag #{value} does not exist"))
-    else:
-        TagSubscription.objects.get_or_create(
-            chat=chat,
-            tag=tag,
-            defaults={'last_recipe_date': datetime.datetime.utcnow()},
+    params_match = re.search(r"^/subscribe\s+(.*?)\s*$", message.text, flags=re.IGNORECASE)
+    if not params_match or params_match.group(1).casefold() == 'help':
+        msg_text = (
+            'Subscribe to new recipes containing a tag or written by an author\\.'
+            '\nUsage:'
+            '\n  /subscribe *\\#hashtag*'
+            '\n  /subscribe tag *\\#hashtag*'
+            '\n  /subscribe *Author Name*'
+            '\n  /subscribe author *Author Name*'
         )
-        bot.reply_to(message, escape(f"Subscribed to tag #{tag.name}"))
+        bot.reply_to(message, msg_text)
+        return
 
-
-_unsubscribe_tag_regex = re.compile(r"^/unsubscribe\s+.*tag\s+#?(\w+)\s*$", flags=re.IGNORECASE)
-
-
-@bot.message_handler(regexp=_unsubscribe_tag_regex.pattern)
-def _cmd_unsubscribe_tag(message: Message) -> None:
-    """Handler for bot command "unsubscribe from the tag"
-
-    :param message: Telegram message
-    """
-
-    chat = Chat.update_from_message(message)
-
-    value_match = _unsubscribe_tag_regex.search(message.text)
-    if not value_match:
-        raise ValueError(f"Cannot find matches for regex {_unsubscribe_tag_regex} in text '{message.text}'")
-    value = value_match.group(1)
-
-    tag_id = Tag.id_from_name(value)
+    params = params_match.group(1)
     try:
-        tag = Tag.objects.get(pk=tag_id)
-    except Tag.DoesNotExist:
-        bot.reply_to(message, escape(f"Tag #{value} does not exist"))
-    else:
-        TagSubscription.objects.filter(chat=chat, tag=tag).delete()
-        bot.reply_to(message, escape(f"Unsubscribed from tag #{tag.name}"))
+        item = _get_command_subject(params)
+    except TagNotFoundError as exc:
+        msg_text = f"Tag *\\#{escape(exc.tag_name)}* does not exist"
+        bot.reply_to(message, msg_text)
+        return
+    except AuthorNotFoundError as exc:
+        msg_text = f"Author *{escape(exc.author_name)}* does not exist"
+        bot.reply_to(message, msg_text)
+        return
+    except AmbiguousCommandSubject as exc:
+        msg_text = (
+            f"Cannot decide between a tag and an author\\."
+            f"\nPlease repeat your command and specify item type:"
+            f"\n  /subscribe tag *\\#{escape(exc.tag.name)}*"
+            f"\n    or"
+            f"\n  /subscribe author *{escape(exc.author.name)}*"
+        )
+        bot.reply_to(message, msg_text)
+        return
 
+    if not item:
+        msg_text = f"Cannot find not author nor tag named *{escape(params)}*"
+        bot.reply_to(message, msg_text)
+        return
 
-_subscribe_author_regex = re.compile(r"^/subscribe\s+.*author\s+(.*)\s*$", flags=re.IGNORECASE)
-
-
-@bot.message_handler(regexp=_subscribe_author_regex.pattern)
-def _cmd_subscribe_author(message: Message) -> None:
-    """Handler for bot command "subscribe to the author"
-
-    :param message: Telegram message
-    """
-
-    chat = Chat.update_from_message(message)
-
-    value_match = _subscribe_author_regex.search(message.text)
-    if not value_match:
-        raise ValueError(f"Cannot find matches for regex {_subscribe_author_regex} in text '{message.text}'")
-
-    value = value_match.group(1)
-    author_id = Author.id_from_name(value)
-    try:
-        author = Author.objects.get(pk=author_id)
-    except Author.DoesNotExist:
-        bot.reply_to(message, escape(f"Author '{value}' does not exist"))
-    else:
+    if isinstance(item, Author):
         AuthorSubscription.objects.get_or_create(
             chat=chat,
-            author=author,
+            author=item,
             defaults={'last_recipe_date': datetime.datetime.utcnow()},
         )
-        bot.reply_to(message, escape(f"Subscribed to {author.name}"))
+        bot.reply_to(message, f"Subscribed to author *{escape(item.name)}*")
+    elif isinstance(item, Tag):
+        TagSubscription.objects.get_or_create(
+            chat=chat,
+            tag=item,
+            defaults={'last_recipe_date': datetime.datetime.utcnow()},
+        )
+        bot.reply_to(message, f"Subscribed to tag *\\#{escape(item.name)}*")
 
 
-_unsubscribe_author_regex = re.compile(r"^/unsubscribe\s+.*author\s+(.*)\s*$", flags=re.IGNORECASE)
-
-
-@bot.message_handler(regexp=_unsubscribe_author_regex.pattern)
-def _cmd_unsubscribe_author(message: Message) -> None:
-    """Handler for bot command "unsubscribe from the author"
+@bot.message_handler(commands=['unsubscribe'])
+def _cmd_unsubscribe(message: Message) -> None:
+    """Handler for bot command "/unsubscribe"
 
     :param message: Telegram message
     """
 
     chat = Chat.update_from_message(message)
+    params_match = re.search(r"^/subscribe\s+(.*?)\s*$", message.text, flags=re.IGNORECASE)
+    if not params_match or params_match.group(1).casefold() == 'help':
+        msg_text = (
+            'Remove created subscription\\.'
+            '\nUsage:'
+            '\n  /unsubscribe *\\#hashtag*'
+            '\n  /unsubscribe tag *\\#hashtag*'
+            '\n  /unsubscribe *Author Name*'
+            '\n  /unsubscribe author *Author Name*'
+        )
+        bot.reply_to(message, msg_text)
+        return
 
-    value_match = _unsubscribe_author_regex.search(message.text)
-    if not value_match:
-        raise ValueError(f"Cannot find matches for regex {_unsubscribe_author_regex} in text '{message.text}'")
-
-    value = value_match.group(1)
-    author_id = Author.id_from_name(value)
+    params = params_match.group(1)
     try:
-        author = Author.objects.get(pk=author_id)
-    except Author.DoesNotExist:
-        bot.reply_to(message, escape(f"Author '{value}' does not exist"))
-    else:
-        AuthorSubscription.objects.filter(chat=chat, author=author).delete()
-        bot.reply_to(message, escape(f"Unsubscribed from {author.name}"))
+        item = _get_command_subject(params)
+    except TagNotFoundError as exc:
+        msg_text = f"Tag *\\#{escape(exc.tag_name)}* does not exist"
+        bot.reply_to(message, msg_text)
+        return
+    except AuthorNotFoundError as exc:
+        msg_text = f"Author *{escape(exc.author_name)}* does not exist"
+        bot.reply_to(message, msg_text)
+        return
+    except AmbiguousCommandSubject as exc:
+        msg_text = (
+            f"Cannot decide between a tag and an author\\."
+            f"\nPlease repeat your command and specify item type:"
+            f"\n  /unsubscribe tag *\\#{escape(exc.tag.name)}*"
+            f"\n    or"
+            f"\n  /unsubscribe author *{escape(exc.author.name)}*"
+        )
+        bot.reply_to(message, msg_text)
+        return
+
+    if not item:
+        msg_text = f"Cannot find not author nor tag named *{escape(params)}*"
+        bot.reply_to(message, msg_text)
+        return
+
+    if isinstance(item, Author):
+        AuthorSubscription.objects.filter(chat=chat, author=item).delete()
+        bot.reply_to(message, f"Unsubscribed from author *{escape(item.name)}*")
+    elif isinstance(item, Tag):
+        TagSubscription.objects.filter(chat=chat, tag=item).delete()
+        bot.reply_to(message, f"Unsubscribed from tag *\\#{escape(item.name)}*")
 
 
-_search_recipe_regex = re.compile(r"^/search\s+(.*)\s*$", flags=re.IGNORECASE)
-
-
-@bot.message_handler(regexp=_search_recipe_regex.pattern)
-def _cmd_search_recipes(message: Message) -> None:
-    """Handler for bot command "search for recipes"
+@bot.message_handler(commands=['search'])
+def _cmd_search(message: Message) -> None:
+    """Handler for bot command "/search"
 
     :param message: Telegram message
     """
 
     chat = Chat.update_from_message(message)
-
-    value_match = _search_recipe_regex.search(message.text)
-    if not value_match:
-        raise ValueError(f"Cannot find matches for regex {_search_recipe_regex} in text '{message.text}'")
-    value = value_match.group(1)
+    params_match = re.search(r"^/search\s+(.*?)\s*$", message.text, flags=re.IGNORECASE)
+    if not params_match or params_match.group(1).casefold() == 'help':
+        msg_text = (
+            'Show the list of your favorite recipes\\.'
+            '\nUsage:'
+            '\n  /search *italian pizza* \\- search for classic pizza recipes'
+            '\n  /search *chicken or beef* \\- search for chicken or beef recipes'
+            '\n  /search *pizza \\-pineapple* \\- search for pizza without pineapple recipes'
+        )
+        bot.reply_to(message, msg_text)
+        return
 
     search_list_msg = SearchListMessage(
         chat=chat,
-        query=value.casefold(),
+        query=params_match.group(1).casefold(),
         page_n=0,
     )
     page = search_list_msg.current_page(page_size=SEARCH_PAGE_SIZE)
@@ -184,13 +249,22 @@ def _cmd_search_recipes(message: Message) -> None:
 
 
 @bot.message_handler(commands=['liked'])
-def _cmd_liked_recipes(message: Message) -> None:
-    """Handler for bot command "show my liked recipes"
+def _cmd_liked(message: Message) -> None:
+    """Handler for bot command "/liked"
 
     :param message: Telegram message
     """
 
     chat = Chat.update_from_message(message)
+    params_match = re.search(r"^/liked\s+(.*?)\s*$", message.text, flags=re.IGNORECASE)
+    if params_match:
+        msg_text = (
+            'Show the list of your favorite recipes\\.'
+            '\nUsage:'
+            '\n  /liked'
+        )
+        bot.reply_to(message, msg_text)
+        return
 
     liked_list_msg = LikedListMessage(
         chat=chat,
@@ -212,13 +286,23 @@ def _cmd_liked_recipes(message: Message) -> None:
 
 
 @bot.message_handler(commands=['random'])
-def _cmd_random_recipe(message: Message) -> None:
-    """Handler for bot command "show a random recipe"
+def _cmd_random(message: Message) -> None:
+    """Handler for bot command "/random"
 
     :param message: Telegram message
     """
 
     chat = Chat.update_from_message(message)
+    params_match = re.search(r"^/random\s+(.*?)\s*$", message.text, flags=re.IGNORECASE)
+    if params_match:
+        msg_text = (
+            'Show a random recipe\\.'
+            '\nUsage:'
+            '\n  /random'
+        )
+        bot.reply_to(message, msg_text)
+        return
+
     recipe = Recipe.objects.all().order_by('?')[0]
     msg_text, msg_markup = format_recipe_msg(recipe)
     bot.send_message(
@@ -236,7 +320,16 @@ def _cmd_unknown(message: Message) -> None:
     """
 
     Chat.update_from_message(message)
-    bot.reply_to(message, escape('Command not recognized'))
+    help_text = (
+        'You can control me by sending these commands:'
+        '\n'
+        '\n  /search \\- search for recipes'
+        '\n  /liked \\- view your favorite recipes'
+        '\n  /random \\- get a random recipe'
+        '\n  /subscribe \\- subscribe to a tag or author'
+        '\n  /unsubscribe \\- unsubscribe from a tag or author'
+    )
+    bot.reply_to(message, help_text)
 
 
 @bot.callback_query_handler(func=lambda cb_query: cb_query.data.startswith(f"{CALLBACK_SEARCH_RECIPES}/"))
