@@ -11,18 +11,18 @@ import recipes.models
 
 class Chat(models.Model):
     id = models.BigIntegerField(primary_key=True)
-    username = models.TextField()
-    first_name = models.TextField()
-    last_name = models.TextField()
+    username = models.TextField(null=True)
+    first_name = models.TextField(null=True)
+    last_name = models.TextField(null=True)
     last_seen_date = models.DateTimeField(auto_now=True)
     liked_recipes = models.ManyToManyField(recipes.models.Recipe)
 
     @classmethod
     def update_from_message(cls, message: Message) -> Chat:
         chat, _ = cls.objects.get_or_create(id=message.chat.id)
-        chat.username = message.chat.username
-        chat.first_name = message.chat.first_name
-        chat.last_name = message.chat.last_name
+        chat.username = message.chat.username or None
+        chat.first_name = message.chat.first_name or None
+        chat.last_name = message.chat.last_name or None
         chat.save()
         return chat
 
