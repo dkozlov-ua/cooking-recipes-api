@@ -39,6 +39,14 @@ class RecipeAdmin(admin.ModelAdmin):
     @staticmethod
     @admin.display(description='Ingredient groups (formatted)')
     def ingredient_groups_pretty(obj: models.Recipe) -> SafeString:
+        """Generates HTML representation for a recipe's ingredients list.
+
+        Works OK with Grappelli, might need correction for the vanilla Django admin widgets.
+
+        :param obj: a target recipe.
+        :return: an HTML-formatted ingredients list.
+        """
+
         ingredients_repr = ''
         for group in obj.ingredient_groups:
             if group['title']:
@@ -46,13 +54,20 @@ class RecipeAdmin(admin.ModelAdmin):
             for ingredient in group['ingredients']:
                 ingredients_repr += f"&nbsp;-&nbsp;{ingredient}</br>"
             ingredients_repr += '</br>'
+        # Remove dangling </br> tag if the group hasn't got a title
         ingredients_repr = ingredients_repr.removesuffix('</br>')
         return mark_safe(ingredients_repr)
 
     def get_search_results(self, request: HttpRequest, queryset: QuerySet, search_term: str) -> Tuple[QuerySet, bool]:
-        queryset, may_have_duplicates = super().get_search_results(
-            request, queryset, search_term,
-        )
+        """Performs full text search for recipes.
+
+        :param request: an original HttpRequest object.
+        :param queryset: a queryset to be filtered with full text search.
+        :param search_term: a text to be searched in recipes.
+        :return: a tuple containing a queryset to implement the search
+                 and a boolean indicating if the results may contain duplicates.
+        """
+        queryset, may_have_duplicates = super().get_search_results(request, queryset, search_term)
         query = SearchQuery(search_term, config='english', search_type='websearch')
         queryset |= self.model.objects.filter(essentials_tsvector=query)
         return queryset, may_have_duplicates

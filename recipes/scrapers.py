@@ -8,7 +8,6 @@ from typing import List, Tuple, Optional, Dict, Union
 
 import dateparser
 import requests
-from django.contrib.postgres.search import SearchVector
 from django.db import transaction
 
 from recipes.models import Recipe, Tag, Author
@@ -23,6 +22,12 @@ _encoded_symbols_regex = re.compile(r"&#(\d+);")
 
 
 def _clean_text(text: str) -> str:
+    """Removes HTML tags and decodes amp-encoded symbols in a text.
+
+    :param text: a text to be cleaned.
+    :return: a cleaned text.
+    """
+
     text = text.replace('&amp;', '&')
     text = _html_tags_regex.sub('', text)
     text = _encoded_symbols_regex.sub(lambda symbol: chr(int(symbol.group(1))), text)
@@ -35,12 +40,20 @@ BA_ASSETS_BASE_URL = 'https://assets.bonappetit.com'
 
 
 def _parse_ba_recipe(data: Dict) -> Tuple[Recipe, List[Tag], List[Author]]:
+    """Parses raw Bon Appétit recipe.
+
+    Returned `Recipe` instance is not saved to the database.
+    Returned `Tag` and `Author` instances must be saved and added to recipe's tags and authors.
+
+    :param data: a raw recipe data.
+    :return: a tuple containing a recipe, a list of recipe's tags and a list of recipe's authors.
+    """
+
     ingredient_groups = []
     for ingredient_group in data['ingredientGroups']:
         ingredient_groups.append({
             'title': _clean_text(ingredient_group['hed']).rstrip('.'),
-            'ingredients': [_clean_text(ingredient['description'])
-                            for ingredient in ingredient_group['ingredients']],
+            'ingredients': [_clean_text(ingredient['description']) for ingredient in ingredient_group['ingredients']],
         })
 
     if data['photos']:
@@ -67,18 +80,14 @@ def _parse_ba_recipe(data: Dict) -> Tuple[Recipe, List[Tag], List[Author]]:
 
     tags: List[Tag] = []
     for tag_name in data['cneTags']:
+        # Ignore internal tags
         if tag_name.startswith('_'):
             continue
         tag = Tag(
             id=Tag.id_from_name(tag_name),
-            name=tag_name.replace(' ', '').replace('-', ''),
+            name=Tag.normalize_name(tag_name),
         )
         tags.append(tag)
-    default_tag = Tag(
-        id='bonappetit',
-        name='BonAppetit',
-    )
-    tags.append(default_tag)
 
     authors: List[Author] = []
     if data['contributors']:
@@ -86,17 +95,19 @@ def _parse_ba_recipe(data: Dict) -> Tuple[Recipe, List[Tag], List[Author]]:
                 data['contributors'].get('author') or [],
                 data['contributors'].get('chef') or [],
         ):
-            for author_name in author_row['name'].strip().split(' & '):
+            authors_names = author_row['name'].strip().split(' & ')
+            for author_name in authors_names:
                 author_name = author_name.strip()
+                # Ignore addresses, empty values and other junk
                 if (
                         not author_name
                         or ',' in author_name
-                        or len(author_name.split()) > 3
+                        or (len(author_name.split()) > 3 and author_name != 'The Bon Appétit Test Kitchen')
                 ):
                     continue
                 author = Author(
                     id=Author.id_from_name(author_name),
-                    name=author_name,
+                    name=Author.normalize_name(author_name),
                 )
                 authors.append(author)
 
@@ -104,6 +115,13 @@ def _parse_ba_recipe(data: Dict) -> Tuple[Recipe, List[Tag], List[Author]]:
 
 
 def _load_ba_page(session: requests.Session, page_n: int) -> Dict:
+    """Loads a search results page from the Bon Appétit internal API.
+
+    :param session: a `Session` object to make requests.
+    :param page_n: a target page number.
+    :return: internal API response.
+    """
+
     ba_url = f"{BA_API_BASE_URL}/api/search"
     params: Dict[str, Union[str, int]] = {
         'content': 'recipe',
@@ -127,6 +145,17 @@ def _load_ba_page(session: requests.Session, page_n: int) -> Dict:
 
 
 def bonappetit(from_date: Optional[datetime.datetime], from_page: int = 1) -> Tuple[int, Optional[datetime.datetime]]:
+    """Scrapes and saves to the database recipes from the Bon Appétit internal API.
+
+    Recipes always fetched from newer to older.
+    Saves only recipes with pub_date > from_date.
+
+    :param from_date: a datetime indicating when to stop scraping.
+    :param from_page: a number of a page to start from.
+    :return: a tuple containing a number of saved recipes
+             and a datetime of the latest found (not necessarily saved) recipe.
+    """
+
     session = requests.session()
     saved_items_count = 0
     latest_item_date: Optional[datetime.datetime] = None
@@ -134,6 +163,7 @@ def bonappetit(from_date: Optional[datetime.datetime], from_page: int = 1) -> Tu
     for page_n in count(start=from_page):
         data = _load_ba_page(session, page_n)
 
+        # An empty page indicates the end of results
         if not data['items']:
             logger.info(f"Page {page_n}: stopping: page is empty")
             break
@@ -141,6 +171,8 @@ def bonappetit(from_date: Optional[datetime.datetime], from_page: int = 1) -> Tu
         logger.debug(f"Page {page_n}: fetching items")
         with transaction.atomic():
             for row in data['items']:
+                # Ignore sponsored recipes
+                # Usually they have non-standard structure and/or zero culinary value
                 if '/sponsored/' in row['url'] or row['template'] == 'sponsored':
                     continue
                 pub_date = dateparser.parse(row['pubDate'])
@@ -156,15 +188,10 @@ def bonappetit(from_date: Optional[datetime.datetime], from_page: int = 1) -> Tu
                 recipe, tags, authors = _parse_ba_recipe(row)
 
                 recipe.save()
-                recipe.full_text_tsvector = SearchVector(
-                    'name', 'title', 'description', 'short_description', 'ingredient_groups',
-                    config='english',
-                )
-                recipe.essentials_tsvector = SearchVector(
-                    'title', 'short_description',
-                    config='english',
-                )
+                # Updating tsvector fields manually as Django in lacking support for Postgres generated columns
+                recipe.update_tsvector_fields()
                 recipe.save()
+                # Saving recipe's tags and authors before adding them to corresponding sets.
                 for tag in tags:
                     tag.save()
                 recipe.tags.set(tags)
@@ -179,6 +206,7 @@ def bonappetit(from_date: Optional[datetime.datetime], from_page: int = 1) -> Tu
             logger.info(f"Page {page_n}: stopping: reached target date")
             break
 
+        # Small pause between requests
         time.sleep(random.uniform(0.85, 1.15) * 3.0)
 
     return saved_items_count, latest_item_date

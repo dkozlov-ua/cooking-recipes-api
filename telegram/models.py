@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 from typing import List
 
 from django.db import models
 from django.db.models import QuerySet
+from telebot.types import Message
 
 import recipes.models
 
@@ -13,6 +16,15 @@ class Chat(models.Model):
     last_name = models.TextField()
     last_seen_date = models.DateTimeField(auto_now=True)
     liked_recipes = models.ManyToManyField(recipes.models.Recipe)
+
+    @classmethod
+    def update_from_message(cls, message: Message) -> Chat:
+        chat, _ = cls.objects.get_or_create(id=message.chat.id)
+        chat.username = message.chat.username
+        chat.first_name = message.chat.first_name
+        chat.last_name = message.chat.last_name
+        chat.save()
+        return chat
 
     def __str__(self) -> str:
         return f"@{self.username} ({self.first_name} {self.last_name})"
@@ -46,9 +58,9 @@ class AuthorSubscription(models.Model):
         return f"{self.chat_id} -> {self.author_id}"
 
 
-class SearchRequestMessage(models.Model):
+class SearchListMessage(models.Model):
     message_id = models.BigIntegerField()
-    chat = models.ForeignKey(Chat, related_name='search_messages', on_delete=models.CASCADE)
+    chat = models.ForeignKey(Chat, related_name='search_lists', on_delete=models.CASCADE)
     query = models.TextField()
     page_n = models.IntegerField()
     created_at = models.DateTimeField(auto_now_add=True)

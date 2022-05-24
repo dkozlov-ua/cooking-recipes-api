@@ -11,10 +11,10 @@ from telebot.types import Message, CallbackQuery
 django.setup()
 
 from django.conf import settings
+from recipes.models import Tag, Author, Recipe
 from telegram.message import format_recipe_msg, format_recipes_list_msg
+from telegram.models import Chat, TagSubscription, AuthorSubscription, SearchListMessage, LikedListMessage
 from telegram.utils import escape
-import recipes.models
-import telegram.models
 
 session = requests.Session()
 bot = telebot.TeleBot(
@@ -30,40 +30,30 @@ CALLBACK_SEARCH_RECIPES = 'searchRecipes'
 CALLBACK_LIKED_RECIPES = 'likedRecipes'
 
 
-def _update_chat(message: Message) -> telegram.models.Chat:
-    chat, _ = telegram.models.Chat.objects.get_or_create(id=message.chat.id)
-    chat.username = message.chat.username
-    chat.first_name = message.chat.first_name
-    chat.last_name = message.chat.last_name
-    chat.save()
-    return chat
-
-
-@bot.message_handler(commands=['start'])
-def _cmd_start(message: Message) -> None:
-    _update_chat(message)
-    bot.reply_to(message, escape('You have been registered'))
-
-
 _subscribe_tag_regex = re.compile(r"^/subscribe\s+.*tag\s+#?(\w+)\s*$", flags=re.IGNORECASE)
 
 
 @bot.message_handler(regexp=_subscribe_tag_regex.pattern)
 def _cmd_subscribe_tag(message: Message) -> None:
-    chat = _update_chat(message)
+    """Handler for bot command "subscribe to the tag"
+
+    :param message: Telegram message
+    """
+
+    chat = Chat.update_from_message(message)
 
     value_match = _subscribe_tag_regex.search(message.text)
     if not value_match:
         raise ValueError(f"Cannot find matches for regex {_subscribe_tag_regex} in text '{message.text}'")
     value = value_match.group(1)
 
-    tag_id = recipes.models.Tag.id_from_name(value)
+    tag_id = Tag.id_from_name(value)
     try:
-        tag = recipes.models.Tag.objects.get(pk=tag_id)
-    except recipes.models.Tag.DoesNotExist:
+        tag = Tag.objects.get(pk=tag_id)
+    except Tag.DoesNotExist:
         bot.reply_to(message, escape(f"Tag #{value} does not exist"))
     else:
-        telegram.models.TagSubscription.objects.get_or_create(
+        TagSubscription.objects.get_or_create(
             chat=chat,
             tag=tag,
             defaults={'last_recipe_date': datetime.datetime.utcnow()},
@@ -76,20 +66,25 @@ _unsubscribe_tag_regex = re.compile(r"^/unsubscribe\s+.*tag\s+#?(\w+)\s*$", flag
 
 @bot.message_handler(regexp=_unsubscribe_tag_regex.pattern)
 def _cmd_unsubscribe_tag(message: Message) -> None:
-    chat = _update_chat(message)
+    """Handler for bot command "unsubscribe from the tag"
+
+    :param message: Telegram message
+    """
+
+    chat = Chat.update_from_message(message)
 
     value_match = _unsubscribe_tag_regex.search(message.text)
     if not value_match:
         raise ValueError(f"Cannot find matches for regex {_unsubscribe_tag_regex} in text '{message.text}'")
     value = value_match.group(1)
 
-    tag_id = recipes.models.Tag.id_from_name(value)
+    tag_id = Tag.id_from_name(value)
     try:
-        tag = recipes.models.Tag.objects.get(pk=tag_id)
-    except recipes.models.Tag.DoesNotExist:
+        tag = Tag.objects.get(pk=tag_id)
+    except Tag.DoesNotExist:
         bot.reply_to(message, escape(f"Tag #{value} does not exist"))
     else:
-        telegram.models.TagSubscription.objects.filter(chat=chat, tag=tag).delete()
+        TagSubscription.objects.filter(chat=chat, tag=tag).delete()
         bot.reply_to(message, escape(f"Unsubscribed from tag #{tag.name}"))
 
 
@@ -98,20 +93,25 @@ _subscribe_author_regex = re.compile(r"^/subscribe\s+.*author\s+(.*)\s*$", flags
 
 @bot.message_handler(regexp=_subscribe_author_regex.pattern)
 def _cmd_subscribe_author(message: Message) -> None:
-    chat = _update_chat(message)
+    """Handler for bot command "subscribe to the author"
+
+    :param message: Telegram message
+    """
+
+    chat = Chat.update_from_message(message)
 
     value_match = _subscribe_author_regex.search(message.text)
     if not value_match:
         raise ValueError(f"Cannot find matches for regex {_subscribe_author_regex} in text '{message.text}'")
 
     value = value_match.group(1)
-    author_id = recipes.models.Author.id_from_name(value)
+    author_id = Author.id_from_name(value)
     try:
-        author = recipes.models.Author.objects.get(pk=author_id)
-    except recipes.models.Author.DoesNotExist:
+        author = Author.objects.get(pk=author_id)
+    except Author.DoesNotExist:
         bot.reply_to(message, escape(f"Author '{value}' does not exist"))
     else:
-        telegram.models.AuthorSubscription.objects.get_or_create(
+        AuthorSubscription.objects.get_or_create(
             chat=chat,
             author=author,
             defaults={'last_recipe_date': datetime.datetime.utcnow()},
@@ -124,20 +124,25 @@ _unsubscribe_author_regex = re.compile(r"^/unsubscribe\s+.*author\s+(.*)\s*$", f
 
 @bot.message_handler(regexp=_unsubscribe_author_regex.pattern)
 def _cmd_unsubscribe_author(message: Message) -> None:
-    chat = _update_chat(message)
+    """Handler for bot command "unsubscribe from the author"
+
+    :param message: Telegram message
+    """
+
+    chat = Chat.update_from_message(message)
 
     value_match = _unsubscribe_author_regex.search(message.text)
     if not value_match:
         raise ValueError(f"Cannot find matches for regex {_unsubscribe_author_regex} in text '{message.text}'")
 
     value = value_match.group(1)
-    author_id = recipes.models.Author.id_from_name(value)
+    author_id = Author.id_from_name(value)
     try:
-        author = recipes.models.Author.objects.get(pk=author_id)
-    except recipes.models.Author.DoesNotExist:
+        author = Author.objects.get(pk=author_id)
+    except Author.DoesNotExist:
         bot.reply_to(message, escape(f"Author '{value}' does not exist"))
     else:
-        telegram.models.AuthorSubscription.objects.filter(chat=chat, author=author).delete()
+        AuthorSubscription.objects.filter(chat=chat, author=author).delete()
         bot.reply_to(message, escape(f"Unsubscribed from {author.name}"))
 
 
@@ -146,60 +151,75 @@ _search_recipe_regex = re.compile(r"^/search\s+(.*)\s*$", flags=re.IGNORECASE)
 
 @bot.message_handler(regexp=_search_recipe_regex.pattern)
 def _cmd_search_recipes(message: Message) -> None:
-    chat = _update_chat(message)
+    """Handler for bot command "search for recipes"
+
+    :param message: Telegram message
+    """
+
+    chat = Chat.update_from_message(message)
 
     value_match = _search_recipe_regex.search(message.text)
     if not value_match:
         raise ValueError(f"Cannot find matches for regex {_search_recipe_regex} in text '{message.text}'")
     value = value_match.group(1)
 
-    search_request = telegram.models.SearchRequestMessage(
+    search_list_msg = SearchListMessage(
         chat=chat,
         query=value.casefold(),
         page_n=0,
     )
-    results_page = search_request.current_page(page_size=SEARCH_PAGE_SIZE)
-    if results_page:
-        msg_text, msg_markup = format_recipes_list_msg(results_page, callback_data_prefix=CALLBACK_SEARCH_RECIPES)
+    page = search_list_msg.current_page(page_size=SEARCH_PAGE_SIZE)
+    if page:
+        msg_text, msg_markup = format_recipes_list_msg(page, callback_data_prefix=CALLBACK_SEARCH_RECIPES)
         search_request_message = bot.send_message(
             chat_id=message.chat.id,
             text=msg_text,
             reply_markup=msg_markup,
             disable_web_page_preview=True,
         )
-        search_request.message_id = search_request_message.message_id
-        search_request.save()
+        search_list_msg.message_id = search_request_message.message_id
+        search_list_msg.save()
     else:
         bot.reply_to(message, 'Recipes not found')
 
 
 @bot.message_handler(commands=['liked'])
 def _cmd_liked_recipes(message: Message) -> None:
-    chat = _update_chat(message)
+    """Handler for bot command "show my liked recipes"
 
-    liked_list = telegram.models.LikedListMessage(
+    :param message: Telegram message
+    """
+
+    chat = Chat.update_from_message(message)
+
+    liked_list_msg = LikedListMessage(
         chat=chat,
         page_n=0,
     )
-    results_page = liked_list.current_page(page_size=LIKED_PAGE_SIZE)
-    if results_page:
-        msg_text, msg_markup = format_recipes_list_msg(results_page, callback_data_prefix=CALLBACK_LIKED_RECIPES)
+    page = liked_list_msg.current_page(page_size=LIKED_PAGE_SIZE)
+    if page:
+        msg_text, msg_markup = format_recipes_list_msg(page, callback_data_prefix=CALLBACK_LIKED_RECIPES)
         liked_list_message = bot.send_message(
             chat_id=message.chat.id,
             text=msg_text,
             reply_markup=msg_markup,
             disable_web_page_preview=True,
         )
-        liked_list.message_id = liked_list_message.message_id
-        liked_list.save()
+        liked_list_msg.message_id = liked_list_message.message_id
+        liked_list_msg.save()
     else:
         bot.reply_to(message, 'Recipes not found')
 
 
 @bot.message_handler(commands=['random'])
 def _cmd_random_recipe(message: Message) -> None:
-    chat = _update_chat(message)
-    recipe = recipes.models.Recipe.objects.all().order_by('?')[0]
+    """Handler for bot command "show a random recipe"
+
+    :param message: Telegram message
+    """
+
+    chat = Chat.update_from_message(message)
+    recipe = Recipe.objects.all().order_by('?')[0]
     msg_text, msg_markup = format_recipe_msg(recipe)
     bot.send_message(
         chat_id=chat.id,
@@ -210,25 +230,37 @@ def _cmd_random_recipe(message: Message) -> None:
 
 @bot.message_handler()
 def _cmd_unknown(message: Message) -> None:
+    """Handler for unknown or invalid commands
+
+    :param message: Telegram message
+    """
+
+    Chat.update_from_message(message)
     bot.reply_to(message, escape('Command not recognized'))
 
 
 @bot.callback_query_handler(func=lambda cb_query: cb_query.data.startswith(f"{CALLBACK_SEARCH_RECIPES}/"))
-def _cb_search_recipes(cb_query: CallbackQuery) -> None:
-    chat = _update_chat(cb_query.message)
+def _cb_search_list(cb_query: CallbackQuery) -> None:
+    """Callback handler for search results messages
+
+    :param cb_query: Telegram callback query
+    """
+
+    chat = Chat.update_from_message(cb_query.message)
     _, cmd = cb_query.data.split('/')
-    search_request = telegram.models.SearchRequestMessage.objects.get(message_id=cb_query.message.message_id, chat=chat)
+    search_list_msg = SearchListMessage.objects.get(message_id=cb_query.message.message_id, chat=chat)
+
     if cmd == 'delete':
         bot.delete_message(
             chat_id=chat.id,
-            message_id=search_request.message_id,
+            message_id=search_list_msg.message_id,
         )
-        search_request.is_deleted = True
+        search_list_msg.is_deleted = True
     elif cmd in ('previousPage', 'nextPage'):
         if cmd == 'previousPage':
-            results_page = search_request.previous_page(page_size=SEARCH_PAGE_SIZE)
+            results_page = search_list_msg.previous_page(page_size=SEARCH_PAGE_SIZE)
         elif cmd == 'nextPage':
-            results_page = search_request.next_page(page_size=SEARCH_PAGE_SIZE)
+            results_page = search_list_msg.next_page(page_size=SEARCH_PAGE_SIZE)
         else:
             raise ValueError(f"Unknown cmd: {cmd}")
         if results_page:
@@ -244,25 +276,31 @@ def _cb_search_recipes(cb_query: CallbackQuery) -> None:
             bot.answer_callback_query(cb_query.id, 'Recipes not found')
     else:
         raise ValueError(f"Unknown cmd: {cmd}")
-    search_request.save()
+    search_list_msg.save()
 
 
 @bot.callback_query_handler(func=lambda cb_query: cb_query.data.startswith(f"{CALLBACK_LIKED_RECIPES}/"))
 def _cb_liked_recipes(cb_query: CallbackQuery) -> None:
-    chat = _update_chat(cb_query.message)
+    """Callback handler for liked recipes list messages
+
+    :param cb_query: Telegram callback query
+    """
+
+    chat = Chat.update_from_message(cb_query.message)
     _, cmd = cb_query.data.split('/')
-    liked_list = telegram.models.LikedListMessage.objects.get(message_id=cb_query.message.message_id, chat=chat)
+    liked_list_msg = LikedListMessage.objects.get(message_id=cb_query.message.message_id, chat=chat)
+
     if cmd == 'delete':
         bot.delete_message(
             chat_id=chat.id,
-            message_id=liked_list.message_id,
+            message_id=liked_list_msg.message_id,
         )
-        liked_list.is_deleted = True
+        liked_list_msg.is_deleted = True
     elif cmd in ('previousPage', 'nextPage'):
         if cmd == 'previousPage':
-            results_page = liked_list.previous_page(page_size=LIKED_PAGE_SIZE)
+            results_page = liked_list_msg.previous_page(page_size=LIKED_PAGE_SIZE)
         elif cmd == 'nextPage':
-            results_page = liked_list.next_page(page_size=LIKED_PAGE_SIZE)
+            results_page = liked_list_msg.next_page(page_size=LIKED_PAGE_SIZE)
         else:
             raise ValueError(f"Unknown cmd: {cmd}")
         if results_page:
@@ -278,15 +316,21 @@ def _cb_liked_recipes(cb_query: CallbackQuery) -> None:
             bot.answer_callback_query(cb_query.id, 'Recipes not found')
     else:
         raise ValueError(f"Unknown cmd: {cmd}")
-    liked_list.save()
+    liked_list_msg.save()
 
 
 @bot.callback_query_handler(func=lambda cb_query: cb_query.data.startswith('recipe/'))
 def _cb_recipe(cb_query: CallbackQuery) -> None:
-    chat = _update_chat(cb_query.message)
+    """Callback handler for recipe messages
+
+    :param cb_query: Telegram callback query
+    """
+
+    chat = Chat.update_from_message(cb_query.message)
     _, recipe_id, cmd = cb_query.data.split('/')
+
     if cmd == 'show':
-        recipe = recipes.models.Recipe.objects.get(id=recipe_id)
+        recipe = Recipe.objects.get(id=recipe_id)
         msg_text, msg_markup = format_recipe_msg(recipe)
         bot.send_message(
             chat_id=chat.id,
@@ -299,7 +343,7 @@ def _cb_recipe(cb_query: CallbackQuery) -> None:
             message_id=cb_query.message.message_id,
         )
     elif cmd == 'like':
-        recipe = recipes.models.Recipe.objects.get(id=recipe_id)
+        recipe = Recipe.objects.get(id=recipe_id)
         if recipe in chat.liked_recipes.all():
             chat.liked_recipes.remove(recipe)
             bot.answer_callback_query(cb_query.id, 'Removed from liked recipes')

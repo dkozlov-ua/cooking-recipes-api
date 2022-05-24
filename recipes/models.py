@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import Optional, Literal
 
 from django.contrib.postgres.indexes import GinIndex
-from django.contrib.postgres.search import SearchVectorField, SearchQuery
+from django.contrib.postgres.search import SearchVectorField, SearchQuery, SearchVector
 from django.db import models
 from django.db.models import F, QuerySet
 
@@ -18,7 +19,30 @@ class Tag(models.Model):
 
     @staticmethod
     def id_from_name(name: str) -> str:
-        return re.sub(r"[^\w]+", '', name).casefold()
+        """Generates a normalized id value from a verbose name.
+
+        :param name: a tag's name.
+        :return: a normalized id value.
+        """
+
+        item_id = name.casefold()
+        item_id = unicodedata.normalize('NFKC', item_id)
+        item_id = re.sub(r"'s", '', item_id)
+        item_id = re.sub(r"\W+", '', item_id)
+        return item_id
+
+    @staticmethod
+    def normalize_name(name: str) -> str:
+        """Normalizes a tag's name
+
+        :param name: a verbose tag's name.
+        :return: a normalized verbose tag's name.
+        """
+
+        name = unicodedata.normalize('NFKC', name)
+        name = re.sub(r"'s", '', name)
+        name = re.sub(r"\W+", '', name)
+        return name
 
     def __str__(self) -> str:
         return str(self.name or self.id)
@@ -33,7 +57,29 @@ class Author(models.Model):
 
     @staticmethod
     def id_from_name(name: str) -> str:
-        return re.sub(r"[^\w]+", '', name).casefold()
+        """Generates a normalized id value from a verbose name.
+
+        :param name: an author's name.
+        :return: a normalized id value.
+        """
+
+        item_id = name.casefold()
+        item_id = unicodedata.normalize('NFKC', item_id)
+        item_id = re.sub(r"'s", '', item_id)
+        item_id = re.sub(r"\W+", '', item_id)
+        return item_id
+
+    @staticmethod
+    def normalize_name(name: str) -> str:
+        """Normalizes an author's name
+
+        :param name: a verbose author's name.
+        :return: a normalized verbose author's name.
+        """
+
+        name = unicodedata.normalize('NFKC', name)
+        name = re.sub(r"\s+", ' ', name)
+        return name
 
     def __str__(self) -> str:
         return str(self.name or self.id)
@@ -55,7 +101,9 @@ class Recipe(models.Model):
     tags = models.ManyToManyField(Tag, related_name='recipes')
     authors = models.ManyToManyField(Author, related_name='recipes')
 
+    # Includes: 'name', 'title', 'description', 'short_description', 'ingredient_groups'
     full_text_tsvector = SearchVectorField()
+    # Includes: 'title', 'short_description'
     essentials_tsvector = SearchVectorField()
 
     class Meta:
@@ -63,21 +111,52 @@ class Recipe(models.Model):
         get_latest_by = 'pub_date'
         indexes = [
             models.Index(fields=['pub_date']),
-            GinIndex('full_text_tsvector', name='full_text_tsvector_idx'),
-            GinIndex('essentials_tsvector', name='essentials_tsvector_idx'),
+            GinIndex(fields=['full_text_tsvector']),
+            GinIndex(fields=['essentials_tsvector']),
         ]
 
+    def update_tsvector_fields(self) -> None:
+        """Sets values for tsvector fields for the recipe.
+
+        Object must already be in the database.
+        Does not save changes to the database (need to call save() after update_tsvector_fields()).
+        """
+
+        self.full_text_tsvector = SearchVector(
+            'name', 'title', 'description', 'short_description', 'ingredient_groups',
+            config='english',
+        )
+        self.essentials_tsvector = SearchVector(
+            'title', 'short_description',
+            config='english',
+        )
+
     @classmethod
-    def text_search(cls, query: str, scope: Literal['full_text', 'essentials'] = 'essentials',
-                    queryset: Optional[QuerySet[Recipe]] = None) -> QuerySet[Recipe]:
+    def text_search(
+            cls,
+            query: str,
+            fieldset: Literal['full_text', 'essentials'] = 'essentials',
+            queryset: Optional[QuerySet[Recipe]] = None,
+    ) -> QuerySet[Recipe]:
+        """Search recipes among provided queryset or all recipes with Postgres FTS.
+
+        :param query: a text to be searched.
+        :param fieldset: a set of fields where the query will be searched.
+        :param queryset: an initial queryset.
+        :return: a filtered queryset.
+        """
+
+        # Search among all recipes if the queryset hasn't been provided
         if queryset is None:
             queryset = cls.objects.all()
         tsquery = SearchQuery(query, config='english', search_type='websearch')
-        if scope == 'full_text':
-            return queryset.filter(main_tsvector=tsquery)
-        if scope == 'essentials':
-            return queryset.filter(essentials_tsvector=tsquery)
-        raise ValueError(f"Unknown scope: {scope}")
+        if fieldset == 'full_text':
+            queryset = queryset.filter(main_tsvector=tsquery)
+        elif fieldset == 'essentials':
+            queryset = queryset.filter(essentials_tsvector=tsquery)
+        else:
+            raise ValueError(f"Unknown fieldset: {fieldset}")
+        return queryset
 
     def __str__(self) -> str:
         return str(self.title)

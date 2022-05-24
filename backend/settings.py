@@ -18,8 +18,13 @@ from sentry_sdk.integrations.django import DjangoIntegration
 
 from backend.utils import generate_secret_key
 
+# Initialize env vars parser
+# https://django-environ.readthedocs.io/en/latest/
 env = environ.Env()
 
+# Initialize Sentry SDK
+# https://docs.sentry.io/platforms/python/guides/django/
+# https://docs.sentry.io/platforms/python/guides/celery/
 sentry_sdk.init(
     integrations=[
         CeleryIntegration(),
