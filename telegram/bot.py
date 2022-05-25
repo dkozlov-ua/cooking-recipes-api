@@ -219,6 +219,43 @@ def _cmd_subscription(message: Message) -> None:
             bot.reply_to(message, f"Unsubscribed from tag *\\#{escape(item.name)}*")
 
 
+@bot.message_handler(commands=['subscriptions'])
+def _cmd_subscriptions_list(message: Message) -> None:
+    """Handler for bot commands /subscriptions
+
+    :param message: Telegram message
+    """
+
+    chat = Chat.update_from_message(message)
+    args_match = re.search(r"^/subscriptions\s+(.*?)\s*$", message.text, flags=re.IGNORECASE)
+    if args_match:
+        msg_text = (
+            'Show the list of your subscriptions\\.'
+            '\nUsage:'
+            '\n  /subscriptions'
+        )
+        bot.reply_to(message, msg_text)
+        return
+
+    msg_blocks: List[str] = []
+    tag_subscriptions = TagSubscription.objects.filter(chat=chat).prefetch_related().order_by('tag__name')
+    if tag_subscriptions:
+        msg_blocks.append(
+            '*Tags:*\n' + '\n'.join(f"  \\#{subscription.tag.name}" for subscription in tag_subscriptions)
+        )
+    author_subscriptions = AuthorSubscription.objects.filter(chat=chat).prefetch_related().order_by('author__name')
+    if author_subscriptions:
+        msg_blocks.append(
+            '*Authors:*\n' + '\n'.join(f"  {subscription.author.name}" for subscription in author_subscriptions)
+        )
+    if not msg_blocks:
+        msg_text = 'You don\'t have any subscriptions\\.' \
+                   ' You can subscribe to tags and authors with /subscribe command\\.'
+        bot.reply_to(message, msg_text)
+        return
+    bot.reply_to(message, '\n\n'.join(msg_blocks))
+
+
 @bot.message_handler(commands=['search'])
 def _cmd_search(message: Message) -> None:
     """Handler for bot command "/search"
@@ -339,6 +376,7 @@ def _cmd_unknown(message: Message) -> None:
         '\n  /random \\- get a random recipe'
         '\n  /subscribe \\- subscribe to a tag or author'
         '\n  /unsubscribe \\- unsubscribe from a tag or author'
+        '\n  /subscriptions \\- view your subscriptions'
     )
     bot.reply_to(message, msg_text)
 
