@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 SEARCH_PAGE_SIZE = 10
 LIKED_PAGE_SIZE = 10
+SUBSCRIPTIONS_LIMIT = 50
 CALLBACK_SEARCH_RECIPES = 'searchRecipes'
 CALLBACK_LIKED_RECIPES = 'likedRecipes'
 
@@ -185,6 +186,16 @@ def _cmd_subscription(message: Message) -> None:
         return
 
     if cmd == 'subscribe':
+        subscriptions_count = \
+            TagSubscription.objects.filter(chat=chat).count() + AuthorSubscription.objects.filter(chat=chat).count()
+        if subscriptions_count >= SUBSCRIPTIONS_LIMIT:
+            msg_text = (
+                f"You have reached the subscriptions limit \\({SUBSCRIPTIONS_LIMIT}\\)\\."
+                f" Please remove some with /unsubscribe commands first\\."
+            )
+            bot.reply_to(message, msg_text)
+            return
+
         if isinstance(item, Author):
             AuthorSubscription.objects.get_or_create(
                 chat=chat,
