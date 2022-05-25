@@ -65,6 +65,7 @@ def _parse_ba_recipe(data: Dict) -> Tuple[Recipe, List[Tag], List[Author]]:
 
     recipe = Recipe(
         id=data['id'],
+        source=Recipe.Sources.BON_APPETIT,
         url=f"{BA_API_BASE_URL}{data['url']}",
         pub_date=dateparser.parse(data['pubDate']),
         name=_clean_text(data['hed']),

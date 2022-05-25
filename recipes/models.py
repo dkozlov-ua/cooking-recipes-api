@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import re
-import unicodedata
 from typing import Optional, Literal
 
+import unicodedata
 from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.search import SearchVectorField, SearchQuery, SearchVector, TrigramSimilarity
 from django.db import models
@@ -124,7 +124,11 @@ class Author(models.Model):
 
 
 class Recipe(models.Model):
+    class Sources(models.TextChoices):
+        BON_APPETIT = 'Bon Appétit'
+
     id = models.TextField(primary_key=True)
+    source = models.TextField(choices=Sources.choices)
     url = models.URLField(max_length=1000)
     pub_date = models.DateTimeField(null=True)
     name = models.TextField()

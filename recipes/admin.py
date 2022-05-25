@@ -16,7 +16,7 @@ class RecipeAdmin(admin.ModelAdmin):
     search_fields = ['short_description']
     fieldsets = [
         (None, {
-            'fields': ['id', 'url', 'photo_url', 'pub_date', 'name', 'title'],
+            'fields': ['id', 'source', 'url', 'photo_url', 'pub_date', 'name', 'title'],
         }),
         ('Recipe', {
             'fields': ['description', 'short_description', 'ingredient_groups', 'ingredient_groups_pretty'],
