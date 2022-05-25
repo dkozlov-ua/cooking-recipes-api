@@ -44,7 +44,7 @@ class Tag(models.Model):
 
         name = unicodedata.normalize('NFKC', name)
         name = re.sub(r"'s", '', name)
-        name = re.sub(r"\s+", ' ', name)
+        name = re.sub(r"\W+", '', name)
         return name
 
     @classmethod
