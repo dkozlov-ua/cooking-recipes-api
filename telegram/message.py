@@ -8,7 +8,7 @@ from telegram.utils import escape
 
 
 def _format_ingredient_group(group: Dict) -> str:
-    header = f"*{escape(group['title'])}:*\n" if group['title'] else ''
+    header = f"*{escape(group['title'].capitalize())}:*\n" if group['title'] else ''
     body = '\n'.join(f" \\- {escape(ingredient)}" for ingredient in group['ingredients'])
     return header + body
 

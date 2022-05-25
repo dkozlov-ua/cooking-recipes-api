@@ -52,7 +52,7 @@ def _parse_ba_recipe(data: Dict) -> Tuple[Recipe, List[Tag], List[Author]]:
     ingredient_groups = []
     for ingredient_group in data['ingredientGroups']:
         ingredient_groups.append({
-            'title': _clean_text(ingredient_group['hed']).rstrip('.'),
+            'title': _clean_text(ingredient_group['hed']).rstrip('.').capitalize(),
             'ingredients': [_clean_text(ingredient['description']) for ingredient in ingredient_group['ingredients']],
         })
 
