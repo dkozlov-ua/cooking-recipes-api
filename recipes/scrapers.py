@@ -90,6 +90,13 @@ def _parse_ba_recipe(data: Dict) -> Tuple[Recipe, List[Tag], List[Author]]:
         )
         tags.append(tag)
 
+    source_tag_name = 'FromBonAppétit'
+    source_tag = Tag(
+        id=Tag.id_from_name(source_tag_name),
+        name=Tag.normalize_name(source_tag_name),
+    )
+    tags.append(source_tag)
+
     authors: List[Author] = []
     if data['contributors']:
         for author_row in chain(
