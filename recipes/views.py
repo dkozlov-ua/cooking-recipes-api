@@ -3,6 +3,7 @@ from celery.result import AsyncResult
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.filters import OrderingFilter
 from rest_framework.pagination import CursorPagination
 from rest_framework.permissions import IsAuthenticated
@@ -41,6 +42,8 @@ class RecipeViewSet(viewsets.ReadOnlyModelViewSet):
     @staticmethod
     @action(detail=False, methods=['POST'])
     def scrape(request: Request) -> Response:
+        if not request.user.is_staff:
+            raise PermissionDenied
         if request.query_params.get('from_date'):
             from_date = dateparser.parse(str(request.query_params['from_date']))
         else:
