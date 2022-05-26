@@ -129,7 +129,8 @@ CELERY_ACCEPT_CONTENT = ['pickle']
 CELERY_IGNORE_RESULT = True
 
 # Telegram settings
-TELEGRAM_BOT_TOKEN = env('TELEGRAM_BOT_TOKEN', default='TELEGRAM_BOT_TOKEN_NOT_SET')
+TELEGRAM_BOT_ENABLED = env.bool('TELEGRAM_BOT_ENABLED', default=False)
+TELEGRAM_BOT_TOKEN = env('TELEGRAM_BOT_TOKEN', default='TELEGRAM_BOT_TOKEN_NOTSET')
 
 # Grappelli settings
 # https://django-grappelli.readthedocs.io/en/latest

@@ -1,17 +1,13 @@
-# pylint: disable=wrong-import-position
 import datetime
 import logging
 import re
 from typing import Optional, Union, List, Literal
 
-import django
 import requests
 import telebot
+from django.conf import settings
 from telebot.types import Message, CallbackQuery
 
-django.setup()
-
-from django.conf import settings
 from recipes.models import Tag, Author, Recipe
 from telegram.message import format_recipe_msg, format_recipes_list_msg
 from telegram.models import Chat, TagSubscription, AuthorSubscription, SearchListMessage, LikedListMessage
