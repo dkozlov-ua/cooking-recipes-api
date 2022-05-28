@@ -194,17 +194,11 @@ def bonappetit(from_date: Optional[datetime.datetime], from_page: int = 1) -> Tu
                 saved_items_count += 1
 
                 recipe, tags, authors = _parse_ba_recipe(row)
-
-                recipe.save()
-                # Updating tsvector fields manually as Django in lacking support for Postgres generated columns
-                recipe.update_tsvector_fields()
                 recipe.save()
                 # Saving recipe's tags and authors before adding them to corresponding sets.
-                for tag in tags:
-                    tag.save()
+                Tag.objects.bulk_create(tags, ignore_conflicts=True)
+                Author.objects.bulk_create(authors, ignore_conflicts=True)
                 recipe.tags.set(tags)
-                for author in authors:
-                    author.save()
                 recipe.authors.set(authors)
 
         logger.info(f"Page {page_n}: fetched {len(data['items'])} items ({saved_items_count} total)")

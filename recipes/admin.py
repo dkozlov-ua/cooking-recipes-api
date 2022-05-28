@@ -1,7 +1,6 @@
 from typing import Tuple
 
 from django.contrib import admin
-from django.contrib.postgres.search import SearchQuery
 from django.db.models import QuerySet
 from django.http import HttpRequest
 from django.utils.safestring import SafeString, mark_safe
@@ -68,8 +67,7 @@ class RecipeAdmin(admin.ModelAdmin):
                  and a boolean indicating if the results may contain duplicates.
         """
         queryset, may_have_duplicates = super().get_search_results(request, queryset, search_term)
-        query = SearchQuery(search_term, config='english', search_type='websearch')
-        queryset |= self.model.objects.filter(essentials_tsvector=query)
+        queryset |= self.model.text_search(search_term, query_type='websearch', fieldset='essentials')
         return queryset, may_have_duplicates
 
 

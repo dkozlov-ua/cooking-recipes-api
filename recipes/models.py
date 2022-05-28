@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Optional, Literal
+from typing import Optional, Literal, Iterable
 
 import unicodedata
 from django.contrib.postgres.indexes import GinIndex
@@ -144,46 +144,33 @@ class Recipe(models.Model):
     authors = models.ManyToManyField(Author, related_name='recipes')
 
     # Includes: 'name', 'title', 'description', 'short_description', 'ingredient_groups'
-    full_text_tsvector = SearchVectorField()
+    _full_text_tsvector = SearchVectorField()
     # Includes: 'title', 'short_description'
-    essentials_tsvector = SearchVectorField()
+    _essentials_tsvector = SearchVectorField()
 
     class Meta:
         ordering = [F('pub_date').desc(nulls_last=True)]
         get_latest_by = 'pub_date'
         indexes = [
-            models.Index(fields=['pub_date']),
-            GinIndex(fields=['full_text_tsvector']),
-            GinIndex(fields=['essentials_tsvector']),
+            models.Index(fields=['pub_date'], name='recipe_pub_date_idx'),
+            GinIndex(fields=['_full_text_tsvector'], name='recipe_full_text_tsv_idx'),
+            GinIndex(fields=['_essentials_tsvector'], name='recipe_essentials_tsv_idx'),
         ]
-
-    def update_tsvector_fields(self) -> None:
-        """Sets values for tsvector fields for the recipe.
-
-        Object must already be in the database.
-        Does not save changes to the database (need to call save() after update_tsvector_fields()).
-        """
-
-        self.full_text_tsvector = SearchVector(
-            'name', 'title', 'description', 'short_description', 'ingredient_groups',
-            config='english',
-        )
-        self.essentials_tsvector = SearchVector(
-            'title', 'short_description',
-            config='english',
-        )
 
     @classmethod
     def text_search(
             cls,
             query: str,
+            *,
             fieldset: Literal['full_text', 'essentials'] = 'essentials',
+            query_type: Literal['websearch', 'plain', 'raw', 'phrase'] = 'websearch',
             queryset: Optional[QuerySet[Recipe]] = None,
     ) -> QuerySet[Recipe]:
         """Search recipes among provided queryset or all recipes with Postgres FTS.
 
         :param query: a text to be searched.
         :param fieldset: a set of fields where the query will be searched.
+        :param query_type: a search query parser.
         :param queryset: an initial queryset.
         :return: a filtered queryset.
         """
@@ -191,14 +178,34 @@ class Recipe(models.Model):
         # Search among all recipes if the queryset hasn't been provided
         if queryset is None:
             queryset = cls.objects.all()
-        tsquery = SearchQuery(query, config='english', search_type='websearch')
+        tsquery = SearchQuery(query, config='english', search_type=query_type)
         if fieldset == 'full_text':
-            queryset = queryset.filter(main_tsvector=tsquery)
+            queryset = queryset.filter(_full_text_tsvector=tsquery)
         elif fieldset == 'essentials':
-            queryset = queryset.filter(essentials_tsvector=tsquery)
+            queryset = queryset.filter(_essentials_tsvector=tsquery)
         else:
             raise ValueError(f"Unknown fieldset: {fieldset}")
         return queryset
+
+    def save(
+            self,
+            force_insert: bool = False,
+            force_update: bool = False,
+            using: Optional[str] = None,
+            update_fields: Optional[Iterable[str]] = None,
+    ) -> None:
+        # Updating tsvector fields manually as Django is lacking support for Postgres generated columns
+        super().save(force_insert, force_update, using, update_fields)
+        self._full_text_tsvector = SearchVector(
+            'name', 'title', 'description', 'short_description', 'ingredient_groups',
+            config='english',
+        )
+        self._essentials_tsvector = SearchVector(
+            'title', 'short_description',
+            config='english',
+        )
+        update_fields = ('_full_text_tsvector', '_essentials_tsvector')
+        super().save(force_insert, force_update, using, update_fields)
 
     def __str__(self) -> str:
         return str(self.title)
