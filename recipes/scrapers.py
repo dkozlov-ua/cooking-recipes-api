@@ -1,4 +1,5 @@
 import datetime
+import html
 import logging
 import random
 import re
@@ -17,9 +18,6 @@ logger = logging.getLogger(__name__)
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' \
              'Chrome/100.0.4896.127 Safari/537.36'
 
-_html_tags_regex = re.compile(r"<.*?>")
-_encoded_symbols_regex = re.compile(r"&#(\d+);")
-
 
 def _clean_text(text: str) -> str:
     """Removes HTML tags and decodes amp-encoded symbols in a text.
@@ -28,10 +26,9 @@ def _clean_text(text: str) -> str:
     :return: a cleaned text.
     """
 
-    text = text.replace('&amp;', '&')
-    text = _html_tags_regex.sub('', text)
-    text = _encoded_symbols_regex.sub(lambda symbol: chr(int(symbol.group(1))), text)
-    text = text.replace('—', ' — ')
+    text = html.unescape(text)  # decode &XXX; sequences
+    text = re.sub(r"<.*?>", '', text)  # remove HTML tags
+    text = re.sub(r"\S—\S", ' — ', text)  # add missing spaces around '—' symbols
     return text
 
 
