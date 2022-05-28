@@ -67,7 +67,11 @@ class RecipeAdmin(admin.ModelAdmin):
                  and a boolean indicating if the results may contain duplicates.
         """
         queryset, may_have_duplicates = super().get_search_results(request, queryset, search_term)
-        queryset |= self.model.text_search(search_term, query_type='websearch', fieldset='essentials')
+        queryset |= models.Recipe.fts_filter(
+            search_term,
+            query_type='websearch',
+            fieldset=models.Recipe.SearchFieldsets.ESSENTIALS,
+        )
         return queryset, may_have_duplicates
 
 

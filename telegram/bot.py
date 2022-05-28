@@ -263,18 +263,25 @@ def _cmd_search(message: Message) -> None:
     args_match = re.search(r"^/search\s+(.*?)\s*$", message.text, flags=re.IGNORECASE)
     if not args_match or args_match.group(1).casefold() == 'help':
         msg_text = (
-            'Show the list of your favorite recipes\\.'
+            'Search for recipes\\.'
             '\nUsage:'
             '\n  /search *italian pizza* \\- search for classic pizza recipes'
-            '\n  /search *chicken or beef* \\- search for chicken or beef recipes'
-            '\n  /search *pizza \\-pineapple* \\- search for pizza without pineapple recipes'
+            '\n  /search *ingredients: chicken or beef* \\- search for chicken or beef recipes'
+            '\n  /search *pizza, ingredients: \\-pineapple* \\- search for pizza without pineapple recipes'
         )
         bot.reply_to(message, msg_text)
         return
 
+    args = args_match.group(1).casefold()
+    try:
+        recipe_query, ingredients_query = args.split('ingredients', maxsplit=1)
+    except ValueError:
+        recipe_query, ingredients_query = args, ''
+
     search_list_msg = SearchListMessage(
         chat=chat,
-        query=args_match.group(1).casefold(),
+        recipe_query=recipe_query.strip('\n -,.:'),
+        ingredients_query=ingredients_query.strip('\n -,.:'),
         page_n=0,
     )
     page = search_list_msg.current_page(page_size=SEARCH_PAGE_SIZE)

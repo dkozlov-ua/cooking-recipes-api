@@ -127,6 +127,11 @@ class Recipe(models.Model):
     class Sources(models.TextChoices):
         BON_APPETIT = 'Bon Appétit'
 
+    class SearchFieldsets(models.TextChoices):
+        FULL_TEXT = 'Full text'
+        ESSENTIALS = 'Essentials'
+        INGREDIENTS = 'Ingredients'
+
     id = models.TextField(primary_key=True)
     source = models.TextField(choices=Sources.choices)
     url = models.URLField(max_length=1000)
@@ -147,6 +152,8 @@ class Recipe(models.Model):
     _full_text_tsvector = SearchVectorField()
     # Includes: 'title', 'short_description'
     _essentials_tsvector = SearchVectorField()
+    # Includes: 'ingredient_groups'
+    _ingredients_tsvector = SearchVectorField()
 
     class Meta:
         ordering = [F('pub_date').desc(nulls_last=True)]
@@ -155,18 +162,19 @@ class Recipe(models.Model):
             models.Index(fields=['pub_date'], name='recipe_pub_date_idx'),
             GinIndex(fields=['_full_text_tsvector'], name='recipe_full_text_tsv_idx'),
             GinIndex(fields=['_essentials_tsvector'], name='recipe_essentials_tsv_idx'),
+            GinIndex(fields=['_ingredients_tsvector'], name='recipe_ingredients_tsv_idx'),
         ]
 
     @classmethod
-    def text_search(
+    def fts_filter(
             cls,
             query: str,
             *,
-            fieldset: Literal['full_text', 'essentials'] = 'essentials',
+            fieldset: SearchFieldsets = SearchFieldsets.ESSENTIALS,
             query_type: Literal['websearch', 'plain', 'raw', 'phrase'] = 'websearch',
             queryset: Optional[QuerySet[Recipe]] = None,
     ) -> QuerySet[Recipe]:
-        """Search recipes among provided queryset or all recipes with Postgres FTS.
+        """Search recipes among provided queryset or all recipes with Postgres Full Text Search.
 
         :param query: a text to be searched.
         :param fieldset: a set of fields where the query will be searched.
@@ -178,13 +186,16 @@ class Recipe(models.Model):
         # Search among all recipes if the queryset hasn't been provided
         if queryset is None:
             queryset = cls.objects.all()
-        tsquery = SearchQuery(query, config='english', search_type=query_type)
-        if fieldset == 'full_text':
-            queryset = queryset.filter(_full_text_tsvector=tsquery)
-        elif fieldset == 'essentials':
-            queryset = queryset.filter(_essentials_tsvector=tsquery)
-        else:
-            raise ValueError(f"Unknown fieldset: {fieldset}")
+        if query:
+            tsquery = SearchQuery(query, config='english', search_type=query_type)
+            if fieldset == cls.SearchFieldsets.FULL_TEXT:
+                queryset = queryset.filter(_full_text_tsvector=tsquery)
+            elif fieldset == cls.SearchFieldsets.ESSENTIALS:
+                queryset = queryset.filter(_essentials_tsvector=tsquery)
+            elif fieldset == cls.SearchFieldsets.INGREDIENTS:
+                queryset = queryset.filter(_ingredients_tsvector=tsquery)
+            else:
+                raise ValueError(f"Unknown fieldset: {fieldset}")
         return queryset
 
     def save(
@@ -204,7 +215,11 @@ class Recipe(models.Model):
             'title', 'short_description',
             config='english',
         )
-        update_fields = ('_full_text_tsvector', '_essentials_tsvector')
+        self._ingredients_tsvector = SearchVector(
+            'ingredient_groups',
+            config='english',
+        )
+        update_fields = ('_full_text_tsvector', '_essentials_tsvector', '_ingredients_tsvector')
         super().save(force_insert, force_update, using, update_fields)
 
     def __str__(self) -> str:

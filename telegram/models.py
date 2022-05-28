@@ -6,7 +6,7 @@ from django.db import models
 from django.db.models import QuerySet
 from telebot.types import Message
 
-import recipes.models
+from recipes.models import Recipe, Tag, Author
 
 
 class Chat(models.Model):
@@ -15,7 +15,7 @@ class Chat(models.Model):
     first_name = models.TextField(null=True)
     last_name = models.TextField(null=True)
     last_seen_date = models.DateTimeField(auto_now=True)
-    liked_recipes = models.ManyToManyField(recipes.models.Recipe)
+    liked_recipes = models.ManyToManyField(Recipe)
 
     @classmethod
     def update_from_message(cls, message: Message) -> Chat:
@@ -32,7 +32,7 @@ class Chat(models.Model):
 
 class TagSubscription(models.Model):
     chat = models.ForeignKey(Chat, related_name='tag_subscriptions', on_delete=models.CASCADE)
-    tag = models.ForeignKey(recipes.models.Tag, related_name='tag_subscriptions', on_delete=models.CASCADE)
+    tag = models.ForeignKey(Tag, related_name='tag_subscriptions', on_delete=models.CASCADE)
     last_recipe_date = models.DateTimeField()
 
     class Meta:
@@ -46,7 +46,7 @@ class TagSubscription(models.Model):
 
 class AuthorSubscription(models.Model):
     chat = models.ForeignKey(Chat, related_name='author_subscriptions', on_delete=models.CASCADE)
-    author = models.ForeignKey(recipes.models.Author, related_name='author_subscriptions', on_delete=models.CASCADE)
+    author = models.ForeignKey(Author, related_name='author_subscriptions', on_delete=models.CASCADE)
     last_recipe_date = models.DateTimeField()
 
     class Meta:
@@ -61,24 +61,30 @@ class AuthorSubscription(models.Model):
 class SearchListMessage(models.Model):
     message_id = models.BigIntegerField()
     chat = models.ForeignKey(Chat, related_name='search_lists', on_delete=models.CASCADE)
-    query = models.TextField()
+    recipe_query = models.TextField()
+    ingredients_query = models.TextField()
     page_n = models.IntegerField()
     created_at = models.DateTimeField(auto_now_add=True)
     modified_at = models.DateTimeField(auto_now=True)
     is_deleted = models.BooleanField(default=False)
 
-    def get_queryset(self) -> QuerySet[recipes.models.Recipe]:
-        return recipes.models.Recipe.text_search(self.query).order_by('-reviews_count', '-rating', '-pub_date')
+    def get_queryset(self) -> QuerySet[Recipe]:
+        qs = Recipe.objects.all()
+        if self.recipe_query:
+            qs = Recipe.fts_filter(self.recipe_query, queryset=qs, fieldset=Recipe.SearchFieldsets.ESSENTIALS)
+        if self.ingredients_query:
+            qs = Recipe.fts_filter(self.ingredients_query, queryset=qs, fieldset=Recipe.SearchFieldsets.INGREDIENTS)
+        return qs.order_by('-reviews_count', '-rating', '-pub_date')
 
-    def get_page(self, page_n: int, page_size: int) -> List[recipes.models.Recipe]:
+    def get_page(self, page_n: int, page_size: int) -> List[Recipe]:
         start_idx = page_size * page_n
         end_idx = page_size * (page_n + 1)
         return list(self.get_queryset()[start_idx:end_idx])
 
-    def current_page(self, page_size: int) -> List[recipes.models.Recipe]:
+    def current_page(self, page_size: int) -> List[Recipe]:
         return self.get_page(self.page_n, page_size)
 
-    def previous_page(self, page_size: int) -> List[recipes.models.Recipe]:
+    def previous_page(self, page_size: int) -> List[Recipe]:
         if self.page_n == 0:
             return []
         page = self.get_page(self.page_n - 1, page_size)
@@ -86,7 +92,7 @@ class SearchListMessage(models.Model):
             self.page_n -= 1
         return page
 
-    def next_page(self, page_size: int) -> List[recipes.models.Recipe]:
+    def next_page(self, page_size: int) -> List[Recipe]:
         page = self.get_page(self.page_n + 1, page_size)
         if page:
             self.page_n += 1
@@ -101,18 +107,18 @@ class LikedListMessage(models.Model):
     modified_at = models.DateTimeField(auto_now=True)
     is_deleted = models.BooleanField(default=False)
 
-    def get_queryset(self) -> QuerySet[recipes.models.Recipe]:
+    def get_queryset(self) -> QuerySet[Recipe]:
         return self.chat.liked_recipes.all().order_by('title')
 
-    def get_page(self, page_n: int, page_size: int) -> List[recipes.models.Recipe]:
+    def get_page(self, page_n: int, page_size: int) -> List[Recipe]:
         start_idx = page_size * page_n
         end_idx = page_size * (page_n + 1)
         return list(self.get_queryset()[start_idx:end_idx])
 
-    def current_page(self, page_size: int) -> List[recipes.models.Recipe]:
+    def current_page(self, page_size: int) -> List[Recipe]:
         return self.get_page(self.page_n, page_size)
 
-    def previous_page(self, page_size: int) -> List[recipes.models.Recipe]:
+    def previous_page(self, page_size: int) -> List[Recipe]:
         if self.page_n == 0:
             return []
         page = self.get_page(self.page_n - 1, page_size)
@@ -120,7 +126,7 @@ class LikedListMessage(models.Model):
             self.page_n -= 1
         return page
 
-    def next_page(self, page_size: int) -> List[recipes.models.Recipe]:
+    def next_page(self, page_size: int) -> List[Recipe]:
         page = self.get_page(self.page_n + 1, page_size)
         if page:
             self.page_n += 1
