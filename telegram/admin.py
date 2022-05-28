@@ -39,7 +39,25 @@ class TagSubscriptionAdmin(admin.ModelAdmin):
 @admin.register(models.AuthorSubscription)
 class AuthorSubscriptionAdmin(admin.ModelAdmin):
     list_display = ['chat', 'author', 'last_recipe_date']
-    list_filter = ('chat', "author")
+    list_filter = ('chat', 'author')
     list_select_related = True
     readonly_fields = ['chat', 'author']
+    view_on_site = False
+
+
+@admin.register(models.SearchListMessage)
+class SearchListMessageAdmin(admin.ModelAdmin):
+    list_display = ['message_id', 'chat', 'recipe_query', 'ingredients_query', 'created_at', 'is_deleted']
+    list_filter = ('chat',)
+    list_select_related = True
+    readonly_fields = ['message_id', 'chat', 'page_n', 'created_at', 'modified_at']
+    view_on_site = False
+
+
+@admin.register(models.LikedListMessage)
+class LikedListMessageAdmin(admin.ModelAdmin):
+    list_display = ['message_id', 'chat', 'created_at', 'is_deleted']
+    list_filter = ('chat',)
+    list_select_related = True
+    readonly_fields = ['message_id', 'chat', 'page_n', 'created_at', 'modified_at']
     view_on_site = False
