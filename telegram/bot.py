@@ -266,7 +266,7 @@ def _cmd_search(message: Message) -> None:
             'Search for recipes\\.'
             '\nUsage:'
             '\n  /search *italian pizza* \\- search for classic pizza recipes'
-            '\n  /search *ingredients: chicken or beef* \\- search for chicken or beef recipes'
+            '\n  /search *ingredients: pork or beef* \\- search for pork or beef recipes'
             '\n  /search *pizza, ingredients: \\-pineapple* \\- search for pizza without pineapple recipes'
         )
         bot.reply_to(message, msg_text)
@@ -280,8 +280,8 @@ def _cmd_search(message: Message) -> None:
 
     search_list_msg = SearchListMessage(
         chat=chat,
-        recipe_query=recipe_query.strip('\n -,.:'),
-        ingredients_query=ingredients_query.strip('\n -,.:'),
+        recipe_query=recipe_query.strip('\n ,.:'),
+        ingredients_query=ingredients_query.strip('\n ,.:'),
         page_n=0,
     )
     page = search_list_msg.current_page(page_size=SEARCH_PAGE_SIZE)
