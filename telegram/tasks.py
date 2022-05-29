@@ -28,11 +28,15 @@ def fulfill_subscriptions() -> None:
         for tag_subscription in chat.tag_subscriptions.all().select_related('tag'):
             new_recipes = tag_subscription.tag.recipes \
                 .filter(pub_date__gt=tag_subscription.last_recipe_date) \
+                .exclude(tags=chat.blocked_tags) \
+                .exclude(authors=chat.blocked_authors) \
                 .prefetch_related('tags', 'authors')
             recipes_to_send = recipes_to_send.union(new_recipes)
         for author_subscription in chat.author_subscriptions.all().select_related('author'):
             new_recipes = author_subscription.author.recipes \
                 .filter(pub_date__gt=author_subscription.last_recipe_date) \
+                .exclude(tags=chat.blocked_tags) \
+                .exclude(authors=chat.blocked_authors) \
                 .prefetch_related('tags', 'authors')
             recipes_to_send = recipes_to_send.union(new_recipes)
         recipes_to_send = recipes_to_send.order_by('pub_date')

@@ -16,6 +16,8 @@ class Chat(models.Model):
     last_name = models.TextField(null=True)
     last_seen_date = models.DateTimeField(auto_now=True)
     liked_recipes = models.ManyToManyField(Recipe)
+    blocked_tags = models.ManyToManyField(Tag)
+    blocked_authors = models.ManyToManyField(Author)
 
     @classmethod
     def update_from_message(cls, message: Message) -> Chat:

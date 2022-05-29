@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 SEARCH_PAGE_SIZE = 10
 LIKED_PAGE_SIZE = 10
 SUBSCRIPTIONS_LIMIT = 50
+BLOCKED_LIMIT = 50
 CALLBACK_SEARCH_RECIPES = 'searchRecipes'
 CALLBACK_LIKED_RECIPES = 'likedRecipes'
 
@@ -236,17 +237,148 @@ def _cmd_subscriptions_list(message: Message) -> None:
     msg_blocks: List[str] = []
     tag_subscriptions = TagSubscription.objects.filter(chat=chat).prefetch_related().order_by('tag__name')
     if tag_subscriptions:
+        tags_list = (subscription.tag for subscription in tag_subscriptions)
         msg_blocks.append(
-            '*Tags:*\n' + '\n'.join(f"  \\#{subscription.tag.name}" for subscription in tag_subscriptions)
+            '*Tags:*\n' + '\n'.join(f"  \\#{escape(tag.name)}" for tag in tags_list)
         )
     author_subscriptions = AuthorSubscription.objects.filter(chat=chat).prefetch_related().order_by('author__name')
     if author_subscriptions:
+        authors_list = (subscription.author for subscription in author_subscriptions)
         msg_blocks.append(
-            '*Authors:*\n' + '\n'.join(f"  {subscription.author.name}" for subscription in author_subscriptions)
+            '*Authors:*\n' + '\n'.join(f"  {escape(author.name)}" for author in authors_list)
         )
     if not msg_blocks:
         msg_text = 'You don\'t have any subscriptions\\.' \
                    ' You can subscribe to tags and authors with /subscribe command\\.'
+        bot.reply_to(message, msg_text)
+        return
+    bot.reply_to(message, '\n\n'.join(msg_blocks))
+
+
+@bot.message_handler(commands=['block', 'unblock'])
+def _cmd_block(message: Message) -> None:
+    """Handler for bot commands /block and /unblock
+
+    :param message: Telegram message
+    """
+
+    chat = Chat.update_from_message(message)
+
+    cmd: Literal['block', 'unblock']
+    if message.text.startswith('/block'):
+        cmd = 'block'
+    elif message.text.startswith('/unblock'):
+        cmd = 'unblock'
+    else:
+        raise ValueError(f"Cannot get command from message text: {message.text}")
+
+    args_match = re.search(r"^/(?:un)?block\s+(.*?)\s*$", message.text, flags=re.IGNORECASE)
+    if not args_match or args_match.group(1).casefold() == 'help':
+        msg_text = (
+            f"Block recipes containing a tag or written by an author\\."
+            f"\nUsage:"
+            f"\n  /{cmd} *\\#hashtag*"
+            f"\n  /{cmd} tag *\\#hashtag*"
+            f"\n  /{cmd} *Author Name*"
+            f"\n  /{cmd} author *Author Name*"
+        )
+        bot.reply_to(message, msg_text)
+        return
+
+    args = args_match.group(1)
+    try:
+        item = _get_command_subject(args)
+    except TagNotFoundError as exc:
+        msg_text = f"Tag *\\#{escape(exc.tag_name)}* does not exist\\."
+        if exc.corrected_variant:
+            msg_text += f"\nDid you mean *\\#{escape(exc.corrected_variant.name)}*?"
+        bot.reply_to(message, msg_text)
+        return
+    except AuthorNotFoundError as exc:
+        msg_text = f"Author *{escape(exc.author_name)}* does not exist\\."
+        if exc.corrected_variant:
+            msg_text += f"\nDid you mean *{escape(exc.corrected_variant.name)}*?"
+        bot.reply_to(message, msg_text)
+        return
+    except NothingFoundError as exc:
+        msg_text = f"Cannot find not author nor tag named *{escape(args)}*\\."
+        corrected_variants: List[str] = []
+        if exc.corrected_tag_variant:
+            corrected_variants.append(f"*\\#{escape(exc.corrected_tag_variant.name)}*")
+        if exc.corrected_author_variant:
+            corrected_variants.append(f"*{escape(exc.corrected_author_variant.name)}*")
+        if corrected_variants:
+            msg_text += f"\nDid you mean {' or '.join(corrected_variants)}?"
+        bot.reply_to(message, msg_text)
+        return
+    except AmbiguousCommandSubject as exc:
+        msg_text = (
+            f"Cannot decide between a tag and an author\\."
+            f"\nPlease repeat your command and specify item type:"
+            f"\n  /{cmd} tag *\\#{escape(exc.tag.name)}*"
+            f"\n    or"
+            f"\n  /{cmd} author *{escape(exc.author.name)}*"
+        )
+        bot.reply_to(message, msg_text)
+        return
+
+    if cmd == 'block':
+        blocked_count = chat.blocked_tags.all().count() + chat.blocked_authors.all().count()
+        if blocked_count >= BLOCKED_LIMIT:
+            msg_text = (
+                f"You have reached the blocked items limit \\({BLOCKED_LIMIT}\\)\\."
+                f" Please remove some with /unblock commands first\\."
+            )
+            bot.reply_to(message, msg_text)
+            return
+
+        if isinstance(item, Author):
+            chat.blocked_authors.add(item)
+            bot.reply_to(message, f"Blocked author *{escape(item.name)}*")
+        elif isinstance(item, Tag):
+            chat.blocked_tags.add(item)
+            bot.reply_to(message, f"Blocked tag *\\#{escape(item.name)}*")
+    elif cmd == 'unblock':
+        if isinstance(item, Author):
+            chat.blocked_authors.remove(item)
+            bot.reply_to(message, f"Unblocked author *{escape(item.name)}*")
+        elif isinstance(item, Tag):
+            chat.blocked_tags.remove(item)
+            bot.reply_to(message, f"Unblocked tag *\\#{escape(item.name)}*")
+
+
+@bot.message_handler(commands=['blocked'])
+def _cmd_blocked_list(message: Message) -> None:
+    """Handler for bot commands /blocked
+
+    :param message: Telegram message
+    """
+
+    chat = Chat.update_from_message(message)
+    args_match = re.search(r"^/blocked\s+(.*?)\s*$", message.text, flags=re.IGNORECASE)
+    if args_match:
+        msg_text = (
+            'Show the list of your blocked items\\.'
+            '\nUsage:'
+            '\n  /blocked'
+        )
+        bot.reply_to(message, msg_text)
+        return
+
+    msg_blocks: List[str] = []
+    blocked_tags = chat.blocked_tags.all().order_by('name')
+    if blocked_tags:
+        msg_blocks.append(
+            '*Tags:*\n' + '\n'.join(f"  \\#{escape(tag.name)}" for tag in blocked_tags)
+        )
+    blocked_authors = chat.blocked_authors.all().order_by('name')
+    if blocked_authors:
+        msg_blocks.append(
+            '*Authors:*\n' + '\n'.join(f"  {escape(author.name)}" for author in blocked_authors)
+        )
+    if not msg_blocks:
+        msg_text = 'You don\'t have any blocked items\\.' \
+                   ' You can block tags and authors with /block command\\.'
         bot.reply_to(message, msg_text)
         return
     bot.reply_to(message, '\n\n'.join(msg_blocks))
@@ -366,7 +498,11 @@ def _cmd_random(message: Message) -> None:
         bot.reply_to(message, msg_text)
         return
 
-    recipe = Recipe.objects.all().order_by('?')[0]
+    recipe = Recipe.objects \
+        .all() \
+        .exclude(tags=chat.blocked_tags) \
+        .exclude(authors=chat.blocked_authors) \
+        .order_by('?')[0]
     msg_text, msg_markup = format_recipe_msg(recipe)
     bot.send_message(
         chat_id=chat.id,
@@ -392,6 +528,9 @@ def _cmd_unknown(message: Message) -> None:
         '\n  /subscribe \\- subscribe to a tag or author'
         '\n  /unsubscribe \\- unsubscribe from a tag or author'
         '\n  /subscriptions \\- view your subscriptions'
+        '\n  /block \\- block recipes containing a tag or written by an author'
+        '\n  /unblock \\- remove a tag or an author from your blocked list'
+        '\n  /blocked \\- view your blocked list'
     )
     bot.reply_to(message, msg_text)
 
