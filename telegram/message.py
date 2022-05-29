@@ -1,3 +1,4 @@
+from math import ceil
 from typing import Dict, Tuple, List
 
 from more_itertools import chunked_even
@@ -73,10 +74,18 @@ def format_recipe_msg(recipe: recipes.models.Recipe) -> Tuple[str, InlineKeyboar
 def format_recipes_list_msg(
         results: List[recipes.models.Recipe],
         *,
+        total_results_count: int,
+        page_size: int,
+        current_page_n: int,
         callback_data_prefix: str,
 ) -> Tuple[str, InlineKeyboardMarkup]:
     msg_text_rows: List[str] = []
     msg_markup_buttons: List[InlineKeyboardButton] = []
+
+    last_page_n = ceil(total_results_count / page_size)
+    msg_text_rows.append(f"*Found {total_results_count} recipes, showing page {current_page_n+1} of {last_page_n}*")
+    msg_text_rows.append('')
+
     for i, recipe in enumerate(results, start=1):
         msg_text_rows.append(
             f"{i}\\. {_recipe_to_list_item_str(recipe)}"
@@ -84,7 +93,6 @@ def format_recipes_list_msg(
         msg_markup_buttons.append(
             InlineKeyboardButton(text=str(i), callback_data=f"recipe/{recipe.id}/show")
         )
-    msg_text = '\n'.join(msg_text_rows)
 
     msg_markup = InlineKeyboardMarkup()
     for buttons_row in chunked_even(msg_markup_buttons, n=5):
@@ -95,4 +103,5 @@ def format_recipes_list_msg(
         InlineKeyboardButton(text='➡', callback_data=f"{callback_data_prefix}/nextPage"),
     )
 
+    msg_text = '\n'.join(msg_text_rows)
     return msg_text, msg_markup

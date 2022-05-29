@@ -284,11 +284,17 @@ def _cmd_search(message: Message) -> None:
         ingredients_query=ingredients_query.strip('\n ,.:'),
         page_n=0,
     )
-    page = search_list_msg.current_page(page_size=SEARCH_PAGE_SIZE)
-    if page:
-        msg_text, msg_markup = format_recipes_list_msg(page, callback_data_prefix=CALLBACK_SEARCH_RECIPES)
-        search_request_message = bot.send_message(
-            chat_id=message.chat.id,
+    results_page = search_list_msg.current_page(page_size=SEARCH_PAGE_SIZE)
+    if results_page:
+        msg_text, msg_markup = format_recipes_list_msg(
+            results=results_page,
+            total_results_count=search_list_msg.total_results_count(),
+            page_size=SEARCH_PAGE_SIZE,
+            current_page_n=search_list_msg.page_n,
+            callback_data_prefix=CALLBACK_SEARCH_RECIPES,
+        )
+        search_request_message = bot.reply_to(
+            message=message,
             text=msg_text,
             reply_markup=msg_markup,
             disable_web_page_preview=True,
@@ -321,11 +327,17 @@ def _cmd_liked(message: Message) -> None:
         chat=chat,
         page_n=0,
     )
-    page = liked_list_msg.current_page(page_size=LIKED_PAGE_SIZE)
-    if page:
-        msg_text, msg_markup = format_recipes_list_msg(page, callback_data_prefix=CALLBACK_LIKED_RECIPES)
-        liked_list_message = bot.send_message(
-            chat_id=message.chat.id,
+    results_page = liked_list_msg.current_page(page_size=LIKED_PAGE_SIZE)
+    if results_page:
+        msg_text, msg_markup = format_recipes_list_msg(
+            results=results_page,
+            total_results_count=liked_list_msg.total_results_count(),
+            page_size=LIKED_PAGE_SIZE,
+            current_page_n=liked_list_msg.page_n,
+            callback_data_prefix=CALLBACK_LIKED_RECIPES,
+        )
+        liked_list_message = bot.reply_to(
+            message=message,
             text=msg_text,
             reply_markup=msg_markup,
             disable_web_page_preview=True,
@@ -409,7 +421,13 @@ def _cb_search_list(cb_query: CallbackQuery) -> None:
         else:
             raise ValueError(f"Unknown cmd: {cmd}")
         if results_page:
-            msg_text, msg_markup = format_recipes_list_msg(results_page, callback_data_prefix=CALLBACK_SEARCH_RECIPES)
+            msg_text, msg_markup = format_recipes_list_msg(
+                results=results_page,
+                total_results_count=search_list_msg.total_results_count(),
+                page_size=SEARCH_PAGE_SIZE,
+                current_page_n=search_list_msg.page_n,
+                callback_data_prefix=CALLBACK_SEARCH_RECIPES,
+            )
             bot.edit_message_text(
                 chat_id=cb_query.message.chat.id,
                 message_id=cb_query.message.message_id,
@@ -449,7 +467,13 @@ def _cb_liked_recipes(cb_query: CallbackQuery) -> None:
         else:
             raise ValueError(f"Unknown cmd: {cmd}")
         if results_page:
-            msg_text, msg_markup = format_recipes_list_msg(results_page, callback_data_prefix=CALLBACK_LIKED_RECIPES)
+            msg_text, msg_markup = format_recipes_list_msg(
+                results=results_page,
+                total_results_count=liked_list_msg.total_results_count(),
+                page_size=LIKED_PAGE_SIZE,
+                current_page_n=liked_list_msg.page_n,
+                callback_data_prefix=CALLBACK_LIKED_RECIPES,
+            )
             bot.edit_message_text(
                 chat_id=cb_query.message.chat.id,
                 message_id=cb_query.message.message_id,

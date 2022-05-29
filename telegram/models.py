@@ -98,6 +98,9 @@ class SearchListMessage(models.Model):
             self.page_n += 1
         return page
 
+    def total_results_count(self) -> int:
+        return self.get_queryset().count()
+
 
 class LikedListMessage(models.Model):
     message_id = models.BigIntegerField()
@@ -131,3 +134,6 @@ class LikedListMessage(models.Model):
         if page:
             self.page_n += 1
         return page
+
+    def total_results_count(self) -> int:
+        return self.get_queryset().count()
