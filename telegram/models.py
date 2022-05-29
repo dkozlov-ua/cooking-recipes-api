@@ -71,12 +71,15 @@ class SearchListMessage(models.Model):
     is_deleted = models.BooleanField(default=False)
 
     def get_queryset(self) -> QuerySet[Recipe]:
-        qs = Recipe.objects.all().prefetch_related()
+        qs = Recipe.objects \
+            .all() \
+            .exclude(tags=self.chat.blocked_tags) \
+            .exclude(authors=self.chat.blocked_authors)
         if self.recipe_query:
             qs = Recipe.fts_filter(self.recipe_query, queryset=qs, fieldset=Recipe.SearchFieldsets.ESSENTIALS)
         if self.ingredients_query:
             qs = Recipe.fts_filter(self.ingredients_query, queryset=qs, fieldset=Recipe.SearchFieldsets.INGREDIENTS)
-        return qs.order_by('-reviews_count', '-rating', '-pub_date')
+        return qs.prefetch_related().order_by('-reviews_count', '-rating', '-pub_date')
 
     def get_page(self, page_n: int, page_size: int) -> List[Recipe]:
         start_idx = page_size * page_n
