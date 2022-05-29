@@ -18,6 +18,15 @@ def _recipe_to_list_item_str(recipe: recipes.models.Recipe) -> str:
     title = escape(recipe.title)
     rating = escape(f"{recipe.rating:.1f}/{5.0:.1f}")
     reviews_count = escape(f"{recipe.reviews_count}")
+
+    authors_list: Tuple[recipes.models.Author, ...] = tuple(recipe.authors.all())
+    if authors_list:
+        authors_str = ', '.join(f"_{escape(author.name or author.id)}_" for author in authors_list)
+    else:
+        authors_str = ''
+
+    if authors_str:
+        return f"[{title}]({url}) by {authors_str} \\({rating}, {reviews_count} reviews\\)"
     return f"[{title}]({url}) \\({rating}, {reviews_count} reviews\\)"
 
 
