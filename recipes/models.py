@@ -7,7 +7,7 @@ import unicodedata
 from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.search import SearchVectorField, SearchQuery, SearchVector, TrigramSimilarity
 from django.db import models
-from django.db.models import F, QuerySet
+from django.db.models import F, QuerySet, Manager
 
 
 class Tag(models.Model):
@@ -123,14 +123,59 @@ class Author(models.Model):
         return str(self.name or self.id)
 
 
+class RecipeSearchFieldsets(models.TextChoices):
+    FULL_TEXT = 'Full text'
+    ESSENTIALS = 'Essentials'
+    INGREDIENTS = 'Ingredients'
+
+
+class RecipeQuerySet(QuerySet):
+    def text_filter(
+            self,
+            query: str,
+            *,
+            fieldset: RecipeSearchFieldsets = RecipeSearchFieldsets.ESSENTIALS,
+            query_type: Literal['websearch', 'plain', 'raw', 'phrase'] = 'websearch',
+    ) -> RecipeQuerySet:
+        """Filter recipes with Postgres Full Text Search.
+
+        :param query: a text to be searched.
+        :param fieldset: a set of fields where the query will be searched.
+        :param query_type: a search query parser.
+        :return: a filtered queryset.
+        """
+        if not query:
+            return self
+        tsquery = SearchQuery(query, config='english', search_type=query_type)
+        if fieldset == RecipeSearchFieldsets.FULL_TEXT:
+            return self.filter(_full_text_tsvector=tsquery)
+        if fieldset == RecipeSearchFieldsets.ESSENTIALS:
+            return self.filter(_essentials_tsvector=tsquery)
+        if fieldset == RecipeSearchFieldsets.INGREDIENTS:
+            return self.filter(_ingredients_tsvector=tsquery)
+        raise ValueError(f"Unknown fieldset: {fieldset}")
+
+
+class RecipeManager(Manager):
+    def get_queryset(self) -> RecipeQuerySet:
+        return RecipeQuerySet(self.model, using=self._db)
+
+    def text_filter(
+            self,
+            query: str,
+            *,
+            fieldset: RecipeSearchFieldsets = RecipeSearchFieldsets.ESSENTIALS,
+            query_type: Literal['websearch', 'plain', 'raw', 'phrase'] = 'websearch',
+    ) -> RecipeQuerySet:
+        return self.get_queryset().text_filter(query=query, fieldset=fieldset, query_type=query_type)
+
+    def all(self) -> RecipeQuerySet:
+        return self.get_queryset()
+
+
 class Recipe(models.Model):
     class Sources(models.TextChoices):
         BON_APPETIT = 'Bon Appétit'
-
-    class SearchFieldsets(models.TextChoices):
-        FULL_TEXT = 'Full text'
-        ESSENTIALS = 'Essentials'
-        INGREDIENTS = 'Ingredients'
 
     id = models.TextField(primary_key=True)
     source = models.TextField(choices=Sources.choices)
@@ -155,6 +200,8 @@ class Recipe(models.Model):
     # Includes: 'ingredient_groups'
     _ingredients_tsvector = SearchVectorField()
 
+    objects = RecipeManager()
+
     class Meta:
         ordering = [F('pub_date').desc(nulls_last=True)]
         get_latest_by = 'pub_date'
@@ -164,39 +211,6 @@ class Recipe(models.Model):
             GinIndex(fields=['_essentials_tsvector'], name='recipe_essentials_tsv_idx'),
             GinIndex(fields=['_ingredients_tsvector'], name='recipe_ingredients_tsv_idx'),
         ]
-
-    @classmethod
-    def fts_filter(
-            cls,
-            query: str,
-            *,
-            fieldset: SearchFieldsets = SearchFieldsets.ESSENTIALS,
-            query_type: Literal['websearch', 'plain', 'raw', 'phrase'] = 'websearch',
-            queryset: Optional[QuerySet[Recipe]] = None,
-    ) -> QuerySet[Recipe]:
-        """Search recipes among provided queryset or all recipes with Postgres Full Text Search.
-
-        :param query: a text to be searched.
-        :param fieldset: a set of fields where the query will be searched.
-        :param query_type: a search query parser.
-        :param queryset: an initial queryset.
-        :return: a filtered queryset.
-        """
-
-        # Search among all recipes if the queryset hasn't been provided
-        if queryset is None:
-            queryset = cls.objects.all()
-        if query:
-            tsquery = SearchQuery(query, config='english', search_type=query_type)
-            if fieldset == cls.SearchFieldsets.FULL_TEXT:
-                queryset = queryset.filter(_full_text_tsvector=tsquery)
-            elif fieldset == cls.SearchFieldsets.ESSENTIALS:
-                queryset = queryset.filter(_essentials_tsvector=tsquery)
-            elif fieldset == cls.SearchFieldsets.INGREDIENTS:
-                queryset = queryset.filter(_ingredients_tsvector=tsquery)
-            else:
-                raise ValueError(f"Unknown fieldset: {fieldset}")
-        return queryset
 
     def save(
             self,

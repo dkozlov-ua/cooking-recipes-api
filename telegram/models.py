@@ -6,7 +6,7 @@ from django.db import models
 from django.db.models import QuerySet
 from telebot.types import Message
 
-from recipes.models import Recipe, Tag, Author
+from recipes.models import Recipe, RecipeQuerySet, RecipeSearchFieldsets, Tag, Author
 
 
 class Chat(models.Model):
@@ -70,16 +70,19 @@ class SearchListMessage(models.Model):
     modified_at = models.DateTimeField(auto_now=True)
     is_deleted = models.BooleanField(default=False)
 
-    def get_queryset(self) -> QuerySet[Recipe]:
-        qs = Recipe.objects \
-            .all() \
-            .exclude(tags=self.chat.blocked_tags) \
-            .exclude(authors=self.chat.blocked_authors)
+    def get_queryset(self) -> RecipeQuerySet:
+        qs = Recipe.objects.all()
         if self.recipe_query:
-            qs = Recipe.fts_filter(self.recipe_query, queryset=qs, fieldset=Recipe.SearchFieldsets.ESSENTIALS)
+            qs = qs.text_filter(self.recipe_query, fieldset=RecipeSearchFieldsets.ESSENTIALS)
         if self.ingredients_query:
-            qs = Recipe.fts_filter(self.ingredients_query, queryset=qs, fieldset=Recipe.SearchFieldsets.INGREDIENTS)
-        return qs.prefetch_related().order_by('-reviews_count', '-rating', '-pub_date')
+            qs = qs.text_filter(self.ingredients_query, fieldset=RecipeSearchFieldsets.INGREDIENTS)
+        return (
+            qs
+            .exclude(tags=self.chat.blocked_tags)
+            .exclude(authors=self.chat.blocked_authors)
+            .prefetch_related()
+            .order_by('-reviews_count', '-rating', '-pub_date')
+        )
 
     def get_page(self, page_n: int, page_size: int) -> List[Recipe]:
         start_idx = page_size * page_n

@@ -57,7 +57,8 @@ class RecipeAdmin(admin.ModelAdmin):
         ingredients_repr = ingredients_repr.removesuffix('</br>')
         return mark_safe(ingredients_repr)
 
-    def get_search_results(self, request: HttpRequest, queryset: QuerySet, search_term: str) -> Tuple[QuerySet, bool]:
+    def get_search_results(self, request: HttpRequest, queryset: QuerySet, search_term: str) \
+            -> Tuple[QuerySet, bool]:
         """Performs full text search for recipes.
 
         :param request: an original HttpRequest object.
@@ -67,10 +68,10 @@ class RecipeAdmin(admin.ModelAdmin):
                  and a boolean indicating if the results may contain duplicates.
         """
         queryset, may_have_duplicates = super().get_search_results(request, queryset, search_term)
-        queryset |= models.Recipe.fts_filter(
+        queryset |= models.Recipe.objects.text_filter(
             search_term,
             query_type='websearch',
-            fieldset=models.Recipe.SearchFieldsets.ESSENTIALS,
+            fieldset=models.RecipeSearchFieldsets.ESSENTIALS,
         )
         return queryset, may_have_duplicates
 
