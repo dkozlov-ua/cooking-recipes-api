@@ -47,7 +47,10 @@ ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[])
 CSRF_TRUSTED_ORIGINS = env.list('CSRF_TRUSTED_ORIGINS', default=[])
 
 DATABASES = {
-    'default': env.db_url('DATABASE_URL', default='psql://postgres:postgres@postgres:5432/postgres'),
+    'default': {
+        'CONN_MAX_AGE': 0,
+        **env.db_url('DATABASE_URL', default='psql://postgres:postgres@postgres:5432/postgres'),
+    },
 }
 
 # Application definition
