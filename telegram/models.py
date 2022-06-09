@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import List
 
 from django.db import models
-from django.db.models import QuerySet
 from telebot.types import Message
 
 from recipes.models import Recipe, RecipeQuerySet, RecipeSearchFieldsets, Tag, Author
@@ -60,15 +59,49 @@ class AuthorSubscription(models.Model):
         return f"{self.chat_id} -> {self.author_id}"
 
 
-class SearchListMessage(models.Model):
+class ListMessage(models.Model):
     message_id = models.BigIntegerField()
-    chat = models.ForeignKey(Chat, related_name='search_lists', on_delete=models.CASCADE)
-    recipe_query = models.TextField()
-    ingredients_query = models.TextField()
+    chat = models.ForeignKey(Chat, on_delete=models.CASCADE)
     page_n = models.IntegerField()
     created_at = models.DateTimeField(auto_now_add=True)
     modified_at = models.DateTimeField(auto_now=True)
     is_deleted = models.BooleanField(default=False)
+
+    class Meta:
+        abstract = True
+
+    def get_queryset(self) -> RecipeQuerySet:
+        raise NotImplementedError
+
+    def get_page(self, page_n: int, page_size: int) -> List[Recipe]:
+        start_idx = page_size * page_n
+        end_idx = page_size * (page_n + 1)
+        return list(self.get_queryset()[start_idx:end_idx])
+
+    def current_page(self, page_size: int) -> List[Recipe]:
+        return self.get_page(self.page_n, page_size)
+
+    def switch_to_previous_page(self, page_size: int) -> List[Recipe]:
+        if self.page_n == 0:
+            return []
+        page = self.get_page(self.page_n - 1, page_size)
+        if page:
+            self.page_n -= 1
+        return page
+
+    def switch_to_next_page(self, page_size: int) -> List[Recipe]:
+        page = self.get_page(self.page_n + 1, page_size)
+        if page:
+            self.page_n += 1
+        return page
+
+    def total_results_count(self) -> int:
+        return self.get_queryset().count()
+
+
+class SearchListMessage(ListMessage):
+    recipe_query = models.TextField()
+    ingredients_query = models.TextField()
 
     def get_queryset(self) -> RecipeQuerySet:
         qs = Recipe.objects.all()
@@ -84,64 +117,7 @@ class SearchListMessage(models.Model):
             .order_by('-reviews_count', '-rating', '-pub_date')
         )
 
-    def get_page(self, page_n: int, page_size: int) -> List[Recipe]:
-        start_idx = page_size * page_n
-        end_idx = page_size * (page_n + 1)
-        return list(self.get_queryset()[start_idx:end_idx])
 
-    def current_page(self, page_size: int) -> List[Recipe]:
-        return self.get_page(self.page_n, page_size)
-
-    def previous_page(self, page_size: int) -> List[Recipe]:
-        if self.page_n == 0:
-            return []
-        page = self.get_page(self.page_n - 1, page_size)
-        if page:
-            self.page_n -= 1
-        return page
-
-    def next_page(self, page_size: int) -> List[Recipe]:
-        page = self.get_page(self.page_n + 1, page_size)
-        if page:
-            self.page_n += 1
-        return page
-
-    def total_results_count(self) -> int:
-        return self.get_queryset().count()
-
-
-class LikedListMessage(models.Model):
-    message_id = models.BigIntegerField()
-    chat = models.ForeignKey(Chat, related_name='liked_list_messages', on_delete=models.CASCADE)
-    page_n = models.IntegerField()
-    created_at = models.DateTimeField(auto_now_add=True)
-    modified_at = models.DateTimeField(auto_now=True)
-    is_deleted = models.BooleanField(default=False)
-
-    def get_queryset(self) -> QuerySet[Recipe]:
-        return self.chat.liked_recipes.all().prefetch_related().order_by('title')
-
-    def get_page(self, page_n: int, page_size: int) -> List[Recipe]:
-        start_idx = page_size * page_n
-        end_idx = page_size * (page_n + 1)
-        return list(self.get_queryset()[start_idx:end_idx])
-
-    def current_page(self, page_size: int) -> List[Recipe]:
-        return self.get_page(self.page_n, page_size)
-
-    def previous_page(self, page_size: int) -> List[Recipe]:
-        if self.page_n == 0:
-            return []
-        page = self.get_page(self.page_n - 1, page_size)
-        if page:
-            self.page_n -= 1
-        return page
-
-    def next_page(self, page_size: int) -> List[Recipe]:
-        page = self.get_page(self.page_n + 1, page_size)
-        if page:
-            self.page_n += 1
-        return page
-
-    def total_results_count(self) -> int:
-        return self.get_queryset().count()
+class LikedListMessage(ListMessage):
+    def get_queryset(self) -> RecipeQuerySet:
+        return Recipe.objects.all().filter().prefetch_related().order_by('title')

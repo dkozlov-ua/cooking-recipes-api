@@ -554,9 +554,9 @@ def _cb_search_list(cb_query: CallbackQuery) -> None:
         search_list_msg.is_deleted = True
     elif cmd in ('previousPage', 'nextPage'):
         if cmd == 'previousPage':
-            results_page = search_list_msg.previous_page(page_size=SEARCH_PAGE_SIZE)
+            results_page = search_list_msg.switch_to_previous_page(page_size=SEARCH_PAGE_SIZE)
         elif cmd == 'nextPage':
-            results_page = search_list_msg.next_page(page_size=SEARCH_PAGE_SIZE)
+            results_page = search_list_msg.switch_to_next_page(page_size=SEARCH_PAGE_SIZE)
         else:
             raise ValueError(f"Unknown cmd: {cmd}")
         if results_page:
@@ -600,9 +600,9 @@ def _cb_liked_recipes(cb_query: CallbackQuery) -> None:
         liked_list_msg.is_deleted = True
     elif cmd in ('previousPage', 'nextPage'):
         if cmd == 'previousPage':
-            results_page = liked_list_msg.previous_page(page_size=LIKED_PAGE_SIZE)
+            results_page = liked_list_msg.switch_to_previous_page(page_size=LIKED_PAGE_SIZE)
         elif cmd == 'nextPage':
-            results_page = liked_list_msg.next_page(page_size=LIKED_PAGE_SIZE)
+            results_page = liked_list_msg.switch_to_next_page(page_size=LIKED_PAGE_SIZE)
         else:
             raise ValueError(f"Unknown cmd: {cmd}")
         if results_page:
