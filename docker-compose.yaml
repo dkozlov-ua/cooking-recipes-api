@@ -7,6 +7,7 @@ networks:
 volumes:
   postgres_data: { }
   redis_data: { }
+  rabbitmq_data: { }
 
 services:
   api:
@@ -27,7 +28,8 @@ services:
       SENTRY_DSN:
       SENTRY_ENVIRONMENT:
       DATABASE_URL: psql://postgres:postgres@postgres:5432/postgres
-      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: amqp://user:password@rabbitmq:5672/
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
     volumes:
       - ./backend/migrations:/usr/src/app/backend/migrations
       - ./recipes/migrations:/usr/src/app/recipes/migrations
@@ -49,6 +51,8 @@ services:
     command:
       - worker
       - --loglevel=info
+      - --concurrency=3
+      - --purge
     environment:
       DEBUG: ${DEBUG:?err}
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:?err}
@@ -59,7 +63,8 @@ services:
       SENTRY_DSN:
       SENTRY_ENVIRONMENT:
       DATABASE_URL: psql://postgres:postgres@postgres:5432/postgres
-      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: amqp://user:password@rabbitmq:5672/
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
       C_FORCE_ROOT: x
     depends_on:
       - redis
@@ -86,7 +91,8 @@ services:
       SENTRY_DSN:
       SENTRY_ENVIRONMENT:
       DATABASE_URL: psql://postgres:postgres@postgres:5432/postgres
-      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: amqp://user:password@rabbitmq:5672/
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
       C_FORCE_ROOT: x
     depends_on:
       - postgres
@@ -112,7 +118,8 @@ services:
       SENTRY_DSN:
       SENTRY_ENVIRONMENT:
       DATABASE_URL: psql://postgres:postgres@postgres:5432/postgres
-      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: amqp://user:password@rabbitmq:5672/
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
     depends_on:
       - api
     networks:
@@ -136,8 +143,22 @@ services:
 
   redis:
     image: redis:7-alpine
+    command: redis-server --appendonly yes --appendfsync always
     volumes:
       - redis_data:/data
+    networks:
+      - default_net
+    logging:
+      driver: none
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: user
+      RABBITMQ_DEFAULT_PASS: password
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - default_net
     logging:
