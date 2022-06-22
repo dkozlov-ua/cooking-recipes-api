@@ -19,7 +19,10 @@ bot = telebot.TeleBot(
 logger = get_task_logger(__name__)
 
 
-@shared_task
+@shared_task(
+    acks_late=False,
+    ignore_result=True,
+)
 def fulfill_subscriptions() -> None:
     sent_messages_counter: Counter = Counter()
     for chat in Chat.objects.all():
@@ -31,7 +34,7 @@ def fulfill_subscriptions() -> None:
                 .filter(pub_date__gt=tag_subscription.last_recipe_date) \
                 .exclude(tags=chat.blocked_tags) \
                 .exclude(authors=chat.blocked_authors) \
-                .prefetch_related('tags', 'authors')
+                .select_related('tags', 'authors')
             recipes_to_send = recipes_to_send.union(new_recipes)
         for author_subscription in chat.author_subscriptions.all().select_related('author'):
             new_recipes = \
@@ -39,7 +42,7 @@ def fulfill_subscriptions() -> None:
                 .filter(pub_date__gt=author_subscription.last_recipe_date) \
                 .exclude(tags=chat.blocked_tags) \
                 .exclude(authors=chat.blocked_authors) \
-                .prefetch_related('tags', 'authors')
+                .select_related('tags', 'authors')
             recipes_to_send = recipes_to_send.union(new_recipes)
         recipes_to_send = recipes_to_send.order_by('pub_date')
 

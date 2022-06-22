@@ -9,6 +9,7 @@ https://docs.djangoproject.com/en/4.0/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.0/ref/settings/
 """
+from datetime import timedelta
 from pathlib import Path
 
 import environ
@@ -126,10 +127,24 @@ STATIC_ROOT = BASE_DIR / 'static'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Celery settings
+# https://docs.celeryq.dev/en/stable/userguide/configuration.html
 CELERY_BROKER_URL = env('CELERY_BROKER_URL', default='redis://redis:6379/0')
+CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND', default='redis://redis:6379/0')
+CELERY_IGNORE_RESULT = False
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_SERIALIZER = 'pickle'
 CELERY_ACCEPT_CONTENT = ['pickle']
-CELERY_IGNORE_RESULT = True
+CELERY_BEAT_SCHEDULE = {
+    'update-recipes-bonappetit': {
+        'task': 'recipes.tasks.update_recipes_bonappetit',
+        'schedule': timedelta(hours=3),
+    },
+    'fulfill-subscriptions': {
+        'task': 'telegram.tasks.fulfill_subscriptions',
+        'schedule': timedelta(minutes=30),
+    },
+}
 
 # Telegram settings
 TELEGRAM_BOT_ENABLED = env.bool('TELEGRAM_BOT_ENABLED', default=False)

@@ -10,7 +10,11 @@ from recipes import scrapers
 logger = get_task_logger(__name__)
 
 
-@shared_task
+@shared_task(
+    acks_late=False,
+    ignore_result=True,
+    rate_limit='3/h',
+)
 def update_recipes_bonappetit(from_date: Optional[datetime.datetime] = None, from_page: int = 1) -> None:
     """Updates saves new and/or updates old recipes in the database.
 
