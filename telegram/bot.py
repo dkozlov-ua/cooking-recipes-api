@@ -3,14 +3,18 @@ import logging
 import re
 from typing import Optional, Union, List, Literal
 
+import dateparser
 import requests
 import telebot
+from celery import chain
 from django.conf import settings
 from telebot.types import Message, CallbackQuery
 
 from recipes.models import Tag, Author, Recipe
+from recipes.tasks import update_recipes_bonappetit
 from telegram.message import format_recipe_msg, format_recipes_list_msg
 from telegram.models import Chat, TagSubscription, AuthorSubscription, SearchListMessage, LikedListMessage
+from telegram.tasks import fulfill_subscriptions
 from telegram.utils import escape
 
 session = requests.Session()
@@ -509,6 +513,37 @@ def _cmd_random(message: Message) -> None:
         text=msg_text,
         reply_markup=msg_markup,
     )
+
+
+@bot.message_handler(commands=['update'])
+def _cmd_update(message: Message) -> None:
+    """Handler for bot command "/update"
+
+    Available only for admin user.
+
+    :param message: Telegram message
+    """
+
+    chat = Chat.update_from_message(message)
+    if not chat.is_admin:
+        _cmd_unknown(message)
+        return
+
+    args_match = re.search(r"^/update\s+(.*?)\s*$", message.text, flags=re.IGNORECASE)
+    if not args_match or len(args_match.group(1).split()) != 2:
+        msg_text = (
+            'Start recipes updating task\\.'
+            '\nUsage:'
+            '\n  /update <from_date> <from_page>'
+        )
+        bot.reply_to(message, msg_text)
+        return
+    from_date_str, from_page_str = args_match.group(1).casefold().split()
+    task = chain(
+        update_recipes_bonappetit.si(from_date=dateparser.parse(from_date_str), from_page=int(from_page_str)),
+        fulfill_subscriptions.si(),
+    )
+    task.apply_async()
 
 
 @bot.message_handler()

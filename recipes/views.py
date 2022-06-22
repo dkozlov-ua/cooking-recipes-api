@@ -1,19 +1,12 @@
-import dateparser
-from celery.result import AsyncResult
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets
-from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
 from rest_framework.filters import OrderingFilter
 from rest_framework.pagination import CursorPagination
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.request import Request
-from rest_framework.response import Response
 
 from backend.authentication import BearerTokenAuthentication
 from recipes import models
 from recipes import serializers
-from recipes import tasks
 
 
 class RecipeCursorPagination(CursorPagination):
@@ -38,19 +31,3 @@ class RecipeViewSet(viewsets.ReadOnlyModelViewSet):
     }
     ordering_fields = ['pub_date', 'reviews_count']
     ordering = ['-pub_date']
-
-    @staticmethod
-    @action(detail=False, methods=['POST'])
-    def scrape(request: Request) -> Response:
-        if not request.user.is_staff:
-            raise PermissionDenied
-        if request.query_params.get('from_date'):
-            from_date = dateparser.parse(str(request.query_params['from_date']))
-        else:
-            from_date = None
-        from_page = int(request.query_params.get('from_page') or 1)
-
-        task: AsyncResult = tasks.update_recipes_bonappetit.delay(from_date, from_page)
-        return Response({
-            'task_id': task.id,
-        })

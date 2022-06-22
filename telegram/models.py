@@ -14,6 +14,7 @@ class Chat(models.Model):
     first_name = models.TextField(null=True)
     last_name = models.TextField(null=True)
     last_seen_date = models.DateTimeField(auto_now=True)
+    is_admin = models.BooleanField(default=False)
     liked_recipes = models.ManyToManyField(Recipe)
     blocked_tags = models.ManyToManyField(Tag)
     blocked_authors = models.ManyToManyField(Author)
