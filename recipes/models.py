@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import re
-from typing import Optional, Literal, Iterable
+from enum import Enum
+from typing import Optional, Iterable
 
 import unicodedata
 from django.contrib.postgres.indexes import GinIndex
@@ -129,13 +130,20 @@ class RecipeSearchFieldsets(models.TextChoices):
     INGREDIENTS = 'Ingredients'
 
 
+class RecipeQueryType(Enum):
+    WEBSEARCH = 'WEBSEARCH'
+    PLAIN = 'PLAIN'
+    PHRASE = 'PHRASE'
+    RAW = 'RAW'
+
+
 class RecipeQuerySet(QuerySet):
     def text_filter(
             self,
             query: str,
             *,
             fieldset: RecipeSearchFieldsets = RecipeSearchFieldsets.ESSENTIALS,
-            query_type: Literal['websearch', 'plain', 'raw', 'phrase'] = 'websearch',
+            query_type: RecipeQueryType = RecipeQueryType.WEBSEARCH,
     ) -> RecipeQuerySet:
         """Filter recipes with Postgres Full Text Search.
 
@@ -146,7 +154,7 @@ class RecipeQuerySet(QuerySet):
         """
         if not query:
             return self
-        tsquery = SearchQuery(query, config='english', search_type=query_type)
+        tsquery = SearchQuery(query, config='english', search_type=query_type.value)
         if fieldset == RecipeSearchFieldsets.FULL_TEXT:
             return self.filter(_full_text_tsvector=tsquery)
         if fieldset == RecipeSearchFieldsets.ESSENTIALS:
@@ -165,7 +173,7 @@ class RecipeManager(Manager):
             query: str,
             *,
             fieldset: RecipeSearchFieldsets = RecipeSearchFieldsets.ESSENTIALS,
-            query_type: Literal['websearch', 'plain', 'raw', 'phrase'] = 'websearch',
+            query_type: RecipeQueryType = RecipeQueryType.WEBSEARCH,
     ) -> RecipeQuerySet:
         return self.get_queryset().text_filter(query=query, fieldset=fieldset, query_type=query_type)
 

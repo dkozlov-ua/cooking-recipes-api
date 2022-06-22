@@ -70,7 +70,7 @@ class RecipeAdmin(admin.ModelAdmin):
         queryset, may_have_duplicates = super().get_search_results(request, queryset, search_term)
         queryset |= models.Recipe.objects.text_filter(
             search_term,
-            query_type='websearch',
+            query_type=models.RecipeQueryType.WEBSEARCH,
             fieldset=models.RecipeSearchFieldsets.ESSENTIALS,
         )
         return queryset, may_have_duplicates
