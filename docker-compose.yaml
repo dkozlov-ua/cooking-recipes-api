@@ -12,7 +12,7 @@ volumes:
 services:
   api:
     image: recipes:latest
-    entrypoint: ./api_entrypoint.sh
+    entrypoint: ./backend_entrypoint.sh
     command:
       - --access-logfile=-
       - --log-level=info

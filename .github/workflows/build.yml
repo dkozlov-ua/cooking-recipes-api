@@ -25,4 +25,4 @@ jobs:
         with:
           pull: true
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/cooking-recipes:latest
+          tags: ghcr.io/${{ github.repository_owner }}/cooking-recipes-api:latest
