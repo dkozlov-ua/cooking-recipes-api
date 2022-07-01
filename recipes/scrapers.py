@@ -74,6 +74,7 @@ def _parse_ba_recipe(data: Dict) -> Tuple[Recipe, List[Tag], List[Author]]:
         wma_count=data.get('willMakeAgainPct', 0),
         ingredient_groups=ingredient_groups,
         photo_url=photo_url,
+        raw_json=data,
     )
 
     tags: List[Tag] = []
