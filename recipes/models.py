@@ -201,7 +201,7 @@ class Recipe(models.Model):
     tags = models.ManyToManyField(Tag, related_name='recipes')
     authors = models.ManyToManyField(Author, related_name='recipes')
 
-    raw_json = models.JSONField(null=True)
+    raw_json = models.JSONField(null=True, default={})
 
     # Includes: 'name', 'title', 'description', 'short_description', 'ingredient_groups'
     _full_text_tsvector = SearchVectorField()
